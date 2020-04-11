@@ -1,0 +1,11 @@
+BPC			equ		$3
+BDA			equ		$5
+JUMPDEST	equ		$6
+DCIC		equ		$7
+BADVADDR	equ		$8
+BDAM		equ		$9
+BPCM		equ		$11
+SR			equ		$12
+CAUSE		equ		$13
+EPC			equ		$14
+PRID		equ		$15
