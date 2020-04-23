@@ -3,103 +3,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
+#include <termios.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <linux/ppdev.h>
 #include <linux/parport.h>
+#include <xplorer.h>
+#include "pcdrv.h"
 
 #define LPT_DEV "/dev/parport0"
 
 #define EXCHANGE_LEN	1048576
 
-int lpt_fd,action;
+int lpt_fd,action,do_exit;
 unsigned int upload_addr;
+
 const char *lpt_dev = LPT_DEV;
 const char *send_file = NULL;
-
-void pport_clear()
-{
-	struct ppdev_frob_struct frob;
-	int val = 0;
-	
-	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= PARPORT_CONTROL_SELECT;
-	
-	ioctl(lpt_fd, PPWDATA, &frob.val);
-	ioctl(lpt_fd, PPFCONTROL, &val);
-	
-	usleep(1000);
-}
-
-
-int pport_send(int byte)
-{	
-	struct ppdev_frob_struct frob;
-	int timeout,status;
-	
-	// Send the data and put select high
-	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= 0;
-	ioctl(lpt_fd, PPWDATA, &byte);
-	ioctl(lpt_fd, PPFCONTROL, &frob);
-	
-	// Wait until ack signal goes high
-	status = 0;
-	timeout = 0;
-	do
-	{
-		if( timeout > 10000 )
-		{
-			frob.val = PARPORT_CONTROL_SELECT;
-			ioctl(lpt_fd, PPFCONTROL, &frob);
-			return 1;
-		}
-		//usleep(5);
-		ioctl(lpt_fd, PPRSTATUS, &status);
-		timeout++;
-	} while(!(status & PARPORT_STATUS_ACK));
-	
-	// Turn off select line
-	frob.val	= PARPORT_CONTROL_SELECT;
-	ioctl(lpt_fd, PPFCONTROL, &frob);
-	
-	// Wait until ack signal goes low
-	status = PARPORT_STATUS_ACK;
-	timeout = 0;
-	do
-	{
-		if( timeout > 10000 )
-		{
-			frob.val = PARPORT_CONTROL_SELECT;
-			ioctl(lpt_fd, PPFCONTROL, &frob);
-			return 1;
-		}
-		//usleep(5);
-		ioctl(lpt_fd, PPRSTATUS, &status);
-		timeout++;
-	} while((status & PARPORT_STATUS_ACK));
-	
-	frob.val	= 0;
-	ioctl(lpt_fd, PPRSTATUS, &status);
-	
-	return 0;
-}
-
-int pport_sendbytes(unsigned char *bytes, int len)
-{
-	int i;
-	
-	for(i=0; i<len; i++)
-	{
-		if( pport_send(bytes[i]) )
-		{
-			return 1;
-		}
-	}
-	return 0;
-}
 
 
 #define CRC32_REMAINDER		0xFFFFFFFF
@@ -588,13 +511,13 @@ int uploadEXE(const char* exefile) {
 	
 	
 	// Commence upload
-	if( pport_send('E') )
+	if( (i = xp_SendByte(lpt_fd, 'E')) )
 	{
-		printf("Target not responding.\n");
+		printf("Target not responding. %d\n", i);
 		return 1;
 	}
 	
-	if( pport_sendbytes((unsigned char*)&param, sizeof(EXEPARAM)) )
+	if( xp_SendBytes(lpt_fd, (unsigned char*)&param, sizeof(EXEPARAM)) )
 	{
 		printf("Error sending PS-EXE parameters.\n");
 		return 1;
@@ -621,7 +544,7 @@ int uploadEXE(const char* exefile) {
 			fflush(stdout);
 			last_progress = progress;
 		}
-		if( pport_send(buffer[pos]) )
+		if( xp_SendByte(lpt_fd, buffer[pos]) )
 		{
 			printf("\nTimeout error.\n");
 			free(buffer);
@@ -687,7 +610,7 @@ int uploadBIN(const char *binfile, unsigned int addr)
 	param.crc32 = crc32(buffer, param.size, CRC32_REMAINDER);
 		
 	// Send binary upload command
-	if( pport_send('B') )
+	if( xp_SendByte(lpt_fd, 'B') )
 	{
 		printf("Target not responding.\n");
 		free(buffer);
@@ -695,7 +618,7 @@ int uploadBIN(const char *binfile, unsigned int addr)
 	}
 	
 	// Send binary parameters
-	if( pport_sendbytes((unsigned char*)&param, sizeof(BINPARAM)) )
+	if( xp_SendBytes(lpt_fd, (unsigned char*)&param, sizeof(BINPARAM)) )
 	{
 		printf("Error sending binary parameters.\n");
 		free(buffer);
@@ -728,7 +651,7 @@ int uploadBIN(const char *binfile, unsigned int addr)
 			fflush(stdout);
 			last_progress = progress;
 		}
-		if( pport_send(buffer[pos]) )
+		if( xp_SendByte(lpt_fd, buffer[pos]) )
 		{
 			printf("\nTimeout error.\n");
 			free(buffer);
@@ -750,11 +673,83 @@ int uploadBIN(const char *binfile, unsigned int addr)
 	return 0;
 }
 
+
+struct termios orig_term;
+
+void enable_raw_mode()
+{
+    struct termios term;
+    tcgetattr(0, &orig_term);
+	
+	term = orig_term;
+    term.c_lflag &= ~(ICANON | ECHO); // Disable echo as well
+    tcsetattr(0, TCSANOW, &term);
+}
+
+void disable_raw_mode()
+{
+    tcsetattr(0, TCSANOW, &orig_term);
+}
+
+void term_func(int signum)
+{
+	if( do_exit )
+	{
+		close(lpt_fd);
+		disable_raw_mode();
+		exit(0);
+	}
+	
+	do_exit = 1;
+}
+
+int kbhit()
+{    
+	struct timeval tv = { 0L, 0L };
+    
+	fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+	
+    return select(1, &fds, NULL, NULL, &tv);
+}
+
+int getch()
+{
+    int r;
+    unsigned char c;
+    if( (r = read(0, &c, sizeof(c)) ) < 0 )
+	{
+        return r;
+    }
+	else
+	{
+        return c;
+    }
+}
+
+
+void exit_lpt()
+{
+	int i;
+	struct ppdev_frob_struct frob;
+	
+	frob.mask	= PARPORT_CONTROL_SELECT;
+	frob.val	= 0;
+	
+	i = 0;
+	ioctl(lpt_fd, PPWDATA, &i);
+	ioctl(lpt_fd, PPFCONTROL, &frob);
+}
+
 int main(int argc, const char *argv[])
 {
 	int i,j;
+	struct sigaction st;
+	char keypress[8];
+	int keypos,keynpos,keylen;
 	
-	printf("XPSEND - Xplorer upload tool for n00bROM\n");
+	printf("XPCOMMS - Xplorer comms utility for n00bROM\n");
 	printf("2020 Lameguy64 / Meido-Tek Productions\n\n");
 		
 	if( argc <= 1 )
@@ -762,6 +757,7 @@ int main(int argc, const char *argv[])
 		printf("xpsend [-d <dev>] <run|up> <file> [addr]\n\n");
 		printf("Arguments:\n");
 		printf("  -d <dev>         - Specify parallel port device to use.\n");
+		printf("  -serv            - Just enter file serving mode.\n");
 		printf("  run <exefile>    - Upload a PS-EXE/CPE or ELF executable.\n");
 		printf("  up <file> <addr> - Upload a binary file to the specified address.\n\n");
 		
@@ -773,7 +769,7 @@ int main(int argc, const char *argv[])
 	{
 		if( argv[i][0] == '-' )
 		{
-			if( strcasestr(argv[i], "-d") == 0 )
+			if( strcasecmp(argv[i], "-d") == 0 )
 			{
 				i++;
 				if( i >= argc )
@@ -783,8 +779,12 @@ int main(int argc, const char *argv[])
 				}
 				lpt_dev = argv[i];
 			}
+			if( strcasecmp(argv[i], "-serv") == 0 )
+			{
+				action = 3;
+			}
 		}
-		else if( strcmp(argv[i], "run") == 0 )
+		else if( strcasecmp(argv[i], "run") == 0 )
 		{
 			if( action == 0 )
 			{
@@ -798,7 +798,7 @@ int main(int argc, const char *argv[])
 				action = 1;
 			}
 		}
-		else if( strcmp(argv[i], "up") == 0 )
+		else if( strcasecmp(argv[i], "up") == 0 )
 		{
 			if( action == 0 )
 			{
@@ -843,34 +843,8 @@ int main(int argc, const char *argv[])
 		return EXIT_FAILURE;
 	}
 	
-	/*
-	i = ioctl(lpt_fd, PPGETMODES, &j);
-	if( i < 0 )
-	{
-		printf("Unable to get available port modes.\n");
-		ioctl(lpt_fd, PPRELEASE);
-		close(lpt_fd);
-		return EXIT_FAILURE;
-	}
 	
-	printf("Supported modes: ");
-	
-	if( j&PARPORT_MODE_PCSPP )
-		printf("SPP ");
-	if( j&PARPORT_MODE_TRISTATE )
-		printf("Bi-Directional ");
-	if( j&PARPORT_MODE_EPP )
-		printf("EPP ");
-	if( j&PARPORT_MODE_ECP )
-		printf("ECP ");
-	if( j&PARPORT_MODE_COMPAT )
-		printf("Compatibility ");
-	if( j&PARPORT_MODE_DMA )
-		printf("DMA ");
-	printf("\n");
-	*/
-	
-	pport_clear();
+	xp_ClearPort(lpt_fd);
 	
 	
 	if( action == 1 )
@@ -882,8 +856,75 @@ int main(int argc, const char *argv[])
 		uploadBIN(send_file, upload_addr);
 	}
 	
-	close( lpt_fd );
+	/*
+	i = xp_ReadByte(lpt_fd);
+	printf("Dummy read byte returned %d\n", i);
+	*/
 	
+	// Set SIGINT handler for clean exit
+	do_exit = 0;
+	st.sa_handler = term_func;
+	sigemptyset(&st.sa_mask);
+	st.sa_flags = SA_RESTART;
+	sigaction(SIGINT, &st, NULL);
+	
+	enable_raw_mode();
+	
+	pcdrv_init();
+	
+	printf("\nPC File Server active, press Ctrl+C to quit...\n\n");
+	
+	keypos = 0;
+	keynpos = 0;
+	keylen = 0;
+	
+	do_exit = 0;
+	while( !do_exit )
+	{
+		while( kbhit() )
+		{
+			keypress[keynpos] = getch();
+			keynpos = (keynpos+1)%8;
+			
+			if( keylen < 8 )
+			{
+				keylen++;
+			}
+			else
+			{
+				keypos = (keypos+1)%8;
+			}
+		}
+		
+		if( xp_ReadPending(lpt_fd) )
+		{
+			i = xp_ReadByte(lpt_fd);
+			if( i >= 0 )
+			{
+				pcdrv_parse(lpt_fd, i);
+			}
+		}
+		
+		if( keylen > 0  )
+		{
+			if( xp_SendByte(lpt_fd, 0x2F) == 0 )
+			{
+				xp_SendByte(lpt_fd, keypress[keypos]);
+			}
+			keypos = (keypos+1)%8;
+			keylen--;
+		}
+		
+		usleep(100);
+	}
+
+	disable_raw_mode();
+	pcdrv_deinit();
+	//exit_lpt();
+	
+	close( lpt_fd );
+
+	printf("Clean exit.\n");	
 	
 	return 0;
 }

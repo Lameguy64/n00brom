@@ -1,0 +1,68 @@
+Communication direction is PS1 -> PC.
+
+0x10 - Initialize, cleans up session and returns version.
+  [R]int16    - File server version in BCD.
+
+0x20 - Create/open file
+  [S]int16    - File flags
+                (bit0-read, bit1-write, bit2-append).
+  [S]char8... - File name string, end string transmission with NULL byte.
+  [R]byte8    - Error code.
+  [R]byte8    - File handle, 255 on error.
+  [R]int32    - File size.
+
+0x21 - Close file
+  [S]byte8    - File handle.
+  
+0x22 - Read from file
+  [S]byte8    - File handle.
+  [S]int32    - Number of bytes to read.
+  [R]byte8    - Error code.
+  [R]int32    - Number of bytes read.
+  
+  < the following is when bytes read is >0 >
+  
+  [R]byte8... - Data read from file if bytes read is >0.
+  [R]byte8    - Checksum.
+  [S]byte8    - Checksum verify (0 - csum okay, 1 - csum bad and retry)
+  
+  [R]int32    - New file position.
+
+0x23 - Write to file
+  [S]byte8    - File handle.
+  [S]int32    - File position.
+  [S]int32    - Number of bytes to write.
+  
+  [S]byte8... - Data to write
+  [S]byte8    - Checksum
+  [R]byte8    - Error code.
+  
+  [R]int32    - Number of bytes actually written.
+  [R]int32    - New file position.
+
+0x24 - Chdir
+  [S]char8... - Directory name, end string transmission with a NULL terminator.
+  [R]byte8    - Error code.
+  
+0x25 - Find first
+  [S]char8... - Directory path and file name pattern, end with NULL terminator.
+  [R]byte8    - Error code.
+  
+  < the following is when error code is 0 >
+  
+  [R]int32    - File size.
+  [R]byte8    - File attribute.
+  [R]char8... - File name, tops out at 13 characters due to PS1 dir entry limit.
+  
+0x26 - Find next
+  [R]byte8    - Error code.
+
+  < the following is when error code is 0 >
+  
+  [R]int32    - File size.
+  [R]int8     - File attribute.
+  [R]char8... - File name, tops out at 19 characters due to PS1 dir entry limit.
+  
+  
+0x2F - TTY character
+  [S]char8    - Character value.

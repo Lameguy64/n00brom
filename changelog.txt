@@ -1,0 +1,22 @@
+04-23-2020 by Lameguy64:
+
+* Replaced xpsend tool with the more capable xpcomms utility.
+
+* Added PCDRV file access over Xplorer cartridge's parallel port. BIOS file
+  functions such as open(), close(), read(), write(), firstfile() and 
+  nextfile() are implemented.
+
+* Some code tidying up.
+
+* Temporarily replaced custom pad routines with BIOS pad routines, as custom
+  pad routines aren't working properly on PAL units. Remember to turn off
+  analog on controller when uploading via serial as the pad handler would slow
+  down the kernel's interrupt handler enough to throw off SIO downloads.
+
+* Improved reliability of built-in flasher by performing EEPROM writes with
+  interrupts disabled.
+
+
+04-11-2020 by Lameguy64:
+
+* Initial release
