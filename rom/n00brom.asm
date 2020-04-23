@@ -2,24 +2,10 @@
 
 .include "cop0regs.inc"
 .include "hwregs.inc"
+.include "structs.inc"
 
 PROG_addr	equ		0x801EFFF0
 SP_base		equ		0x801ffff0
-
-
-INT_pc		equ		0
-INT_sp		equ		4
-INT_fp		equ		8
-INT_s0		equ		12
-INT_s1		equ		16
-INT_s2		equ		20
-INT_s3		equ		24
-INT_s4		equ		28
-INT_s5		equ		32
-INT_s6		equ		36
-INT_s7		equ		40
-INT_gp		equ		44
-INT_size	equ		48
 
 
 VAR_vsync	equ		0
@@ -41,15 +27,15 @@ VAR_xpready	equ		156
 VAR_pbuff	equ		160
 
 
-SET_vmode		equ		0		; Video mode
-SET_bmode		equ		1		; CD-ROM boot mode
-SET_tty			equ		2		; TTY enable
-SET_except		equ		3		; Exception handler
-SET_carttype	equ		4		; Cartridge type
-SET_offact		equ		5		; Off switch action
-SET_bg			equ		6		; Background
-SET_homemode	equ		7		; Home screen mode
-
+SET_vmode		equ	0		; Video mode
+SET_bmode		equ	1		; CD-ROM boot mode
+SET_tty			equ	2		; TTY enable
+SET_pcdrv		equ	3
+SET_except		equ	4		; Exception handler
+SET_carttype	equ	5		; Cartridge type
+SET_offact		equ	6		; Off switch action
+SET_bg			equ	7		; Background
+SET_homemode	equ	8		; Home screen mode
 
 BRK_vector	equ		0xa0000040
 BRK_addr	equ		0x80030000
@@ -150,8 +136,8 @@ program_start:
 	
 @@no_exception:
 
-	la		v0, config
-	lbu		v0, SET_carttype(v0)	; Skip Xplorer stuff if not set for Xplorer
+	la		v0, config			; Skip Xplorer stuff if not set for Xplorer
+	lbu		v0, SET_carttype(v0)
 	nop
 	bne		v0, 2, @@skip_xplorer
 	nop
@@ -164,6 +150,18 @@ program_start:
 	sb		v0, VAR_xpready(gp)
 
 @@skip_xplorer:
+
+	la		v0, config
+	lbu		v0, SET_pcdrv(v0)
+	nop
+	beqz	v0, @@skip_pcdrv
+	nop
+	
+	la		a0, install_xp_pcdrv
+	jalr	a0
+	nop
+	
+@@skip_pcdrv:
 
 	j		main				; Jump to main
 	rfe
@@ -201,8 +199,27 @@ init:
 	sw		v0, VAR_padbuff+8(gp)
 	sw		v0, VAR_padbuff+12(gp)
 	
-	jal		PadInit					; Initialize pad interface
+	
+	;jal		PadInit					; Initialize pad interface
+	;nop
+	
+	; Use BIOS routines as custom routines are borked for PAL units
+	addiu	a0, gp, VAR_padbuff
+	li		a1, 34
+	addiu	a2, gp, VAR_padbuff+34
+	li		a3, 34
+	jal		InitPAD
+	addiu	sp, -16
+	addiu	sp, 16
+	
+	jal		StartPAD
 	nop
+	
+	move	a0, r0				; Disable VSync IRQ auto acknowledge
+	jal		ChangeClearPAD
+	addiu	sp, -4
+	addiu	sp, 4
+	
 	
 	jal		sioInit					; Initialize serial
 	nop
@@ -212,8 +229,21 @@ init:
 	nop
 	beqz	v0, @@no_tty
 	nop
+	beq		v0, 2, @@xp_tty
+	nop
 	
-	la		a0, InstallTTY
+	; Install serial TTY
+	
+	la		a0, InstallTTY_sio
+	jalr	a0
+	nop
+	
+	b		@@no_tty
+	nop
+	
+@@xp_tty:
+
+	la		a0, InstallTTY_xp
 	jalr	a0
 	nop
 	
@@ -360,137 +390,7 @@ init_disc:							;; Low-level CD init
 	addiu	sp, 4
 	jr		ra
 	nop
-	
-	
-flash_mode:							; Flash mode routine
-	
-	addiu	a0, gp, VAR_siobuff
-	jal		sioSetRead
-	addiu	a1, r0, 4
 
-@@download_wait:
-
-	jal		prep_frame
-	nop
-	
-	la		a0, text_flash_title
-	jal		DrawText_centered
-	li		a1, 0x5c
-	
-	la		a0, text_flash_info
-	jal		DrawText_multiline
-	li		a1, 0x6c
-	
-	la		a0, 0x00500018
-	la		a1, 0x00500110
-	jal		sort_rect
-	move	a2, r0
-	
-	jal		frame_done
-	move	a0, r0
-	
-	addiu	a0, gp, VAR_siobuff		; SIO binary loader
-	la		a1, str_mbin
-	jal		strcmp
-	addiu	sp, -8
-	addiu	sp, 8
-	lw		a0, VAR_sioread(gp)
-	beqz	v0, @@proceed_download
-	nop
-	
-	lw		v0, VAR_sioread(gp)		; Retry
-	nop
-	beqz	v0, flash_mode
-	nop
-	
-	b		@@download_wait
-	nop
-	
-@@proceed_download:
-
-	jal		sio_binloader			; Download the ROM image
-	addiu	a0, r0, 2
-	beqz	v0, flash_mode			; Retry download if checksum failed
-	nop
-	
-	move	s0, v0					; Copy image size to s0
-	
-	addiu	s0, 255					; Round it to multiples of 256
-	srl		s0, 8
-	sll		s0, 8
-
-	ble		s0, 131072, @@no_size_cap	; Cap size to 128KB	just in case
-	nop
-	li		s0, 131072
-@@no_size_cap:
-
-	jal		ChipIdentify			; Get chip page size
-	move	a0, r0
-	jal		ChipPageSize
-	move	a0, v0
-	move	s1, v0
-	
-	jal		prep_frame				; Display flashing message
-	nop
-	la		a0, text_flashing
-	jal		DrawText_centered
-	li		a1, 0x74
-	jal		frame_done
-	addiu	a2, r0, 1
-	
-	lui		t0, 0x8001				; ROM source address
-	move	t1, r0
-@@flash_loop:
-	move	a0, t0
-	move	a1, t1
-	jal		ChipWrite
-	move	a2, s1
-	addu	t1, s1
-	blt		t1, s0, @@flash_loop
-	addu	t0, s1
-	
-	lui		a0, 0x8001				; Do verification
-	lui		a1, 0x1F00
-	move	a2, s0
-@@verify_loop:
-	lbu		v0, 0(a0)
-	lbu		v1, 0(a1)
-	addiu	a0, 1
-	bne		v0, v1, verify_error
-	addiu	a2, -1
-	bgtz	a2, @@verify_loop
-	addiu	a1, 1
-	
-	jal		prep_frame				; Display flash OK message
-	nop
-	la		a0, text_flash_ok
-	jal		DrawText_centered
-	li		a1, 0x74
-	jal		frame_done
-	addiu	a2, r0, 1
-	
-@@infini_loop:
-	b		@@infini_loop
-	nop
-	
-verify_error:
-	jal		prep_frame
-	nop
-	la		a0, text_flash_verify_error
-	jal		DrawText_centered
-	li		a1, 0x74
-	jal		frame_done
-	addiu	a2, r0, 1
-@@infini_loop:
-	b		@@infini_loop
-	nop
-	
-text_flash_verify_error:
-.asciiz "Verification error."
-text_flash_ok:
-.asciiz "Flash OK!"
-.align 0x4
-			
 	
 idle_screen:
 
@@ -623,11 +523,24 @@ idle_screen:
 	
 	sb		r0, 0(s7)
 	
-	la		v0, config
+	la		v0, config					; TTY type
 	lbu		v0, SET_tty(v0)
 	nop
 	beqz	v0, @@no_stty
 	nop
+
+	bne		v0, 2, @@is_stty
+	nop
+	
+	move	a0, s7						; XTTY
+	la		a1, text_option_xtty
+	jal		strcat
+	addiu	sp, -8
+	
+	b		@@no_stty
+	addiu	sp, 8
+
+@@is_stty:
 	
 	move	a0, s7						; STTY
 	la		a1, text_option_stty
@@ -680,19 +593,33 @@ idle_screen:
 	
 @@no_cd_special:
 
-	la		v0, config
+	la		v0, config					; Xplorer download
 	lbu		v0, SET_carttype(v0)
 	nop
 	bne		v0, 2, @@no_xplorer
 	nop
 	
 	move	a0, s7
-	la		a1, text_option_xpdl		; Xplorer download
+	la		a1, text_option_xpdl
 	jal		strcat
 	addiu	sp, -8
 	addiu	sp, 8
 	
 @@no_xplorer:
+
+	la		v0, config					; PCDRV
+	lbu		v0, SET_pcdrv(v0)
+	nop
+	beqz	v0, @@no_pcdrv
+	nop
+	
+	move	a0, s7
+	la		a1, text_option_pcdrv
+	jal		strcat
+	addiu	sp, -8
+	addiu	sp, 8
+	
+@@no_pcdrv:
 
 	
 	move	a2, s7
@@ -790,11 +717,11 @@ idle_screen:
 		
 @@skip_sio_reset:
 	
-		
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -908,7 +835,10 @@ reg2hex:
 	nop
 
 
-.include "pad.inc"
+; Commented out temporarily until fixed for PAL units
+;.include "pad.inc"
+
+.include "flash.inc"
 .include "cd.inc"
 .include "gfx.inc"
 .include "rom_menu.inc"
@@ -1086,6 +1016,7 @@ config:
 	db		0					; Video mode
 	db		0					; CD-ROM boot mode
 	db		0					; TTY redirect
+	db		0					; PCDRV
 	db		0					; Exception handler enable
 	db		0					; Switch type
 	db		0					; Off switch action
@@ -1208,8 +1139,10 @@ build_string:
 .asciiz build_date
 .align 4
 
-.include "exhandler.inc"
 .include "siodev.inc"
+.include "xp_tty.inc"
+.include "xp_pcdrv.inc"
+.include "exhandler.inc"
 .include "strings.inc"
 .include "tables.inc"
 

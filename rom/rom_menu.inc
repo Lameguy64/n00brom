@@ -1,7 +1,15 @@
+;PrintDev:
+;	addiu	t2, r0, 0xB0
+;	jr		t2
+;	addiu	t1, r0, 0x49
+	
 rom_menu:
 	
 	addiu	sp, -4
 	sw		ra, 0(sp)
+	
+	;jal		PrintDev
+	;nop
 	
 	move	s0, r0						; Selected item
 	lhu		s1, VAR_padbuff(gp)
@@ -11,7 +19,9 @@ rom_menu:
 	lw		v0, 0(a0)
 	lw		v1, 4(a0)
 	sw		v0, 0(a1)
+	lw		v0, 8(a0)
 	sw		v1, 4(a1)
+	sw		v0, 8(a1)
 	
 	addiu	sp, -48
 	move	s2, sp
@@ -141,10 +151,11 @@ rom_menu:
 	jal		frame_done
 	move	a0, r0
 	
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -181,14 +192,14 @@ rom_menu:
 	bgez	s0, @@no_pad
 	nop
 	b		@@no_pad
-	addiu	s0, 11
+	addiu	s0, 12
 
 @@menu_down:
 	addiu	s0, 1
-	ble		s0, 10, @@no_pad
+	ble		s0, 11, @@no_pad
 	nop
 	b		@@no_pad
-	addiu	s0, -11
+	addiu	s0, -12
 
 @@menu_left:
 	addiu	v0, gp, VAR_cdresp
@@ -263,7 +274,9 @@ rom_menu:
 	lw		v0, VAR_cdresp+0(gp)
 	lw		v1, VAR_cdresp+4(gp)
 	sw		v0, 0(a0)
+	lw		v0, VAR_cdresp+8(gp)
 	sw		v1, 4(a0)
+	sw		v0, 8(a0)
 	
 	la		a1, config
 	jal		ChipWrite

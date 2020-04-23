@@ -53,6 +53,23 @@ LoadExec:
 	jr		t2
 	addiu	t1, r0, 0x51
 	
+	
+InitPAD:
+	addiu	t2, r0, 0xB0
+	jr		t2
+	addiu	t1, r0, 0x12
+	
+StartPAD:
+	addiu	t2, r0, 0xB0
+	jr		t2
+	addiu	t1, r0, 0x13
+	
+StopPAD:
+	addiu	t2, r0, 0xB0
+	jr		t2
+	addiu	t1, r0, 0x14
+	
+	
 ReturnFromException:
 	addiu	t2, r0, 0xB0
 	jr		t2
@@ -82,16 +99,6 @@ close:
 	addiu   t2, r0, 0xB0
 	jr      t2
 	addiu   t1, r0, 0x36
-	
-AddDev:
-	addiu	t2, r0, 0xB0
-	jr		t2
-	addiu	t1, r0, 0x47
-	
-DelDev:
-	addiu	t2, r0, 0xB0
-	jr		t2
-	addiu	t1, r0, 0x48
 	
 ChangeClearPAD:
 	addiu	t2, r0, 0xB0

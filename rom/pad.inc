@@ -1,3 +1,8 @@
+; 04-23-2020 Lameguy64:
+; There's issues reading certain controllers on PAL units with this pad read
+; routine. Can't debug myself as I don't have a PAL unit to test on. Some
+; controllers read properly however, maybe needs more delays elsewhere?
+
 JOY_TXRX	equ		0x1040
 JOY_STAT	equ		0x1044
 JOY_MODE	equ		0x1048

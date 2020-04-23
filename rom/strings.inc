@@ -19,11 +19,10 @@ notice:
 .ascii	"github.com/lameguy64/n00brom", 0x10
 .ascii	"lameguy64.net/?page=n00brom", 0x10, 0x00
 
-text_sample:
-.asciiz "STTY+EXCEPT+UNLK+XPDL+PCDRV"
-
 text_option_stty:
 .asciiz "STTY "
+text_option_xtty:
+.asciiz "XTTY "
 text_option_except:
 .asciiz "EXCEPT "
 text_option_unlock:
@@ -32,6 +31,8 @@ text_option_swap:
 .asciiz "SWAP "
 text_option_xpdl:
 .asciiz "XPDL "
+text_option_pcdrv:
+.asciiz "PCDRV "
 
 text_swap_start:
 .asciiz	"Press START to EZ-swap boot CD..."
@@ -134,22 +135,16 @@ hex_tbl:
 ; For CNF parser and CD-ROM boot stuff
 s_boot:
 .asciiz "BOOT"
-.align 4
 s_tcb:
 .asciiz "TCB"
-.align 4
 s_evcb:
 .asciiz "EVENT"
-.align 4
 s_stack:
 .asciiz "STACK"
-.align 4
 s_systemcnf:
 .asciiz "cdrom:SYSTEM.CNF;1"
-.align 4
 s_psxexe:
 .asciiz "cdrom:PSX.EXE;1"
-.align 4
 
 ; HC05 region strings
 s_europe_chk:
@@ -186,6 +181,8 @@ dh	0,3
 dw	list_bootmode
 dh	0,3
 dw	list_ttymode
+dh	0,3
+dw	list_pcdrv
 dh	0,2
 dw	list_exception
 dh	0,2
@@ -209,6 +206,7 @@ list_menu_options:
 dw	list_videomode_options
 dw	list_bootmode_options
 dw	list_ttymode_options
+dw	list_pcdrv_options
 dw	list_exception_options
 dw	list_cart_options
 dw	list_off_switch_options
@@ -227,13 +225,14 @@ dw	list_bootmode_unlock
 dw	list_bootmode_swap
 	
 list_ttymode_options:
-dw	list_options_off
-dw	list_options_on
+dw	list_option_off
+dw	list_option_serial
+dw	list_option_xplorer
 
 list_cart_options:
 dw	list_ctype_generic
 dw	list_ctype_par
-dw	list_ctype_xplorer
+dw	list_option_xplorer
 	
 list_background_options:
 dw	list_background_plasma
@@ -246,42 +245,52 @@ dw	list_home_banner
 dw	list_home_simple
 dw	list_home_bgonly
 	
+list_pcdrv_options:
+dw	list_option_off
+dw	list_option_on
+
 list_cdonexec_options:
-dw	list_options_off
-dw	list_options_on
+dw	list_option_off
+dw	list_option_on
 	
 list_exception_options:
-dw	list_options_off
-dw	list_options_on
+dw	list_option_off
+dw	list_option_on
 	
 list_off_switch_options:
 dw	list_off_switch_bios
 dw	list_off_switch_quickboot
 ;dw	list_off_switch_rom
 	
-list_options_on:
-.asciiz "On"
-list_options_off:
+list_option_off:
 .asciiz "Off"
-	
+list_option_on:
+.asciiz "On"
+list_option_serial:
+.asciiz "Serial"
+list_option_xplorer:
+.asciiz "Xplorer"
+
 list_videomode:
 .asciiz	"Video Standard"
 list_bootmode:
 .asciiz	"CD-ROM Boot Mode"
 list_ttymode:
-.asciiz "TTY over SIO"
+.asciiz "TTY Interface"
+list_pcdrv:
+.asciiz "PCDRV (Xplorer only)"
 list_cdonexec:
 .asciiz	"Unlock/Swap on Exec"
 list_background:
 .asciiz "Background"
-list_home_screen:
-.asciiz "Home Screen",0x10
 list_cart_type:
 .asciiz "Cartridge Type"
 list_off_switch:
 .asciiz	"OFF Switch Mode"
 list_exception:
 .asciiz	"Exception"
+list_home_screen:
+.asciiz "Home Screen",0x10
 list_flash:
 .asciiz "Flash Mode...",0x10
 list_flasher:
@@ -309,8 +318,6 @@ list_ctype_generic:
 .asciiz "Generic"
 list_ctype_par:
 .asciiz "PAR/GS"
-list_ctype_xplorer:
-.asciiz "Xplorer"
 
 list_background_plasma:
 .asciiz	"Plasma"

@@ -1,17 +1,5 @@
 ; Serial routines and TTY device hook
 
-FCB_status		equ	0
-FCB_diskid		equ	4
-FCB_taddr		equ	8
-FCB_tlen		equ	12
-FCB_filepos		equ	16
-FCB_flags		equ	20
-FCB_lasterr		equ	24
-FCB_dcb			equ	28
-FCB_filesize	equ	32
-FCB_lba			equ	36
-FCB_fcbnum		equ	40
-
 
 sio_dev_name:
 	.asciiz "tty"
@@ -85,7 +73,7 @@ sioSendByte_rom:
 	addiu	sp, 4
 
 
-InstallTTY:
+InstallTTY_sio:
 	addiu	sp, -4
 	sw		ra, 0(sp)
 	
@@ -103,7 +91,7 @@ InstallTTY:
 	addiu	sp, -4
 	addiu	sp, 4
 	
-	la		a0, sio_dcb			; Add n00bROM's TTY device
+	la		a0, siotty_dcb		; Add n00bROM's serial TTY device
 	jal		rom_AddDev
 	addiu	sp, -4
 	addiu	sp, 4
@@ -193,12 +181,30 @@ sio_dev_inout:
 	addiu	sp, 8
 	
 	
-sio_dev_ioctl:
-	lui		a3, 0x1F80
-	lbu		v0, SIO_STAT_REG(a3)
-	nop
+sio_dev_close:
 	jr		ra
+	move	v0, r0
+	
+	
+sio_dev_ioctl:
+
+	; FIOCSCAN is only supported
+	bne		a1, (('f'<<8)|2), @@exit
+	addiu	v0, r0, -1
+	
+	lui		a1, 0x1F80
+	lbu		v0, SIO_STAT_REG(a1)
+	nop
 	andi	v0, 0x2
+	
+	beqz	v0, @@exit
+	addiu	v0, r0, -1
+	
+	move	v0, r0
+	
+@@exit:
+	jr		ra
+	nop
 	
 	
 rom_open:
@@ -222,10 +228,10 @@ rom_DelDev:
 	addiu	t1, r0, 0x48
 	
 	
-sio_dcb:
+siotty_dcb:
 	dw	sio_dev_name	; Device name
 	dw	0x3				; Flags
-	dw	1				; Size
+	dw	0				; Size
 	dw	sio_dev_info	; Description
 	dw	sio_dev_init	; init
 	dw	sio_dev_open	; open

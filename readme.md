@@ -24,11 +24,15 @@ swap trick boot methods.
 
 * Upload PS-EXEs and binary files over serial using mcomms/liteload protocol,
   or high speed upload over parallel port with an Xplorer using the included
-  xpsend tool (Linux only, but should work with USB and PCIE parallel port
-  adapters provided they support SPP).
+  xpcomms tool (Linux only, but should work with USB and PCIE parallel port
+  adapters, provided they support SPP).
 
-* TTY over serial redirection for stdin and stdout, use mcomms in -term mode
-  or any serial terminal program to interact (serial parameters are 115200 8n1).
+* TTY redirection to serial or the Xplorer's parallel port for both stdin
+  and stdout. Use mcomms in -term mode or any serial terminal program
+  (serial parameters are 115200 8n1) for serial or the included xpcomms
+  tool for parallel port.
+
+* Access files from your PC through the pcdrv interface (Xplorer only).
 
 * Exception screen for trapping software crashes visually.
 
@@ -36,7 +40,7 @@ swap trick boot methods.
 
 * Supports more EEPROMs than Caetla.
 
-* Built-in flasher, for updating n00bROM easily!
+* Built-in EEPROM flasher for updating n00bROM easily!
 
 * Background options: Animated plasma and SMPTE bars.
 
@@ -67,13 +71,21 @@ the ROM menu. From here, you can configure n00bROM to your liking.
   swap trick method, is only effective if you have a licensed PS1 CD-ROM with a
   matching region inserted prior to swapping it with your CD-R or imported disc.
   
-* TTY over SIO: Specifies if a custom TTY hook which directs TTY messages
-  through stdout to the serial port should be installed. The hook also directs
-  incoming input from serial to stdin, so BIOS stdio input functions such as
-  gets() and getchar() can be used. Calling ioctl(0, 0, 0) can be used to
-  determine if there's pending input, it returns non-zero if there's input
-  pending.
+* TTY Interface: Specifies if a custom TTY device which directs TTY messages
+  through stdout should be installed. Interfaces can be serial or Xplorer, the
+  latter of which uses the parallel port interface provided by the cartridge.
+  The hook also directs incoming input to stdin so BIOS stdio input functions
+  such as gets() and getchar() can be used to acquire user input. Use
+  ioctl(0, FIOCSCAN, 0) or ioctl(0, (('f'<<8)|2), 0) to test for pending input
+  asynchronously, as it returns non-zero if there's input. The Xplorer interface
+  cannot buffer key presses unlike the serial interface.
 
+* PCDRV (Xplorer only): If enabled, n00bROM will install a special pcdrv device
+  to the kernel, permitting the ability to access files directly from the host
+  PC using BIOS file functions. This is akin to the pcdrv feature found in
+  Caetla and official PS1 development environments. PCDRV through break
+  instructions are not supported however.
+  
 * Exception: Specifies if n00bROM's exception handler should be installed.
   The exception handler will trap any unhandled exceptions (ie. a software
   crash) and display a hexdump of all CPU registers which can be used to

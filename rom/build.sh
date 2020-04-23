@@ -1,6 +1,6 @@
 #!/bin/bash
 
-version="0.10a"
+version="0.20a"
 build_date=$(date +%Y%m%d%H%M)
 
 armips -strequ build_date $build_date -strequ version $version \

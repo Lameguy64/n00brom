@@ -1,6 +1,3 @@
-
-
-
 xp_readbyte:
 	lui		a0, XP_IOBASE			
 

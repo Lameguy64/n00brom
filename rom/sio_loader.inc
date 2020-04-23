@@ -1,28 +1,3 @@
-EXEC_pc0	equ		0
-EXEC_gp0	equ		4
-EXEC_taddr	equ		8
-EXEC_tsize	equ		12
-EXEC_daddr	equ		16
-EXEC_dsize	equ		20
-EXEC_baddr	equ		24
-EXEC_bsize	equ		28
-EXEC_saddr	equ		32
-EXEC_ssize	equ		36
-EXEC_sp		equ		40
-EXEC_fp		equ		44
-EXEC_ra		equ		48
-EXEC_ret	equ		52
-EXEC_base	equ		56
-EXEC_crc32	equ		60
-EXEC_flags	equ		64
-EXEC_len	equ		68
-
-BIN_size	equ		0
-BIN_addr	equ		4
-BIN_crc32	equ		8
-BIN_len		equ		12
-
-
 sio_loader:							;; Loader routine
 
 	addiu	sp, -4
@@ -264,6 +239,10 @@ do_loader_exec:
 	jal		ChangeClearRCnt
 	addiu	sp, -8
 	addiu	sp, 8
+	
+	; Turn off BIOS pad routine	
+	jal		StopPAD
+	nop
 	
 	lui		a0, 0x801F				; Set stack address
 	ori		a0, 0xFFF0

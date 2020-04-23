@@ -1,23 +1,5 @@
 ; Disc boot-up sequence
 
-EXE_pc0		equ	0			; PS-EXE header offsets
-EXE_gp0		equ	4
-EXE_taddr	equ	8
-EXE_tsize	equ	12
-EXE_daddr	equ	16
-EXE_dsize	equ	20
-EXE_baddr	equ	24
-EXE_bsize	equ	28
-EXE_spaddr	equ	32
-EXE_sp_size	equ	36
-EXE_sp		equ	40
-EXE_fp		equ 44
-EXE_gp		equ	48
-EXE_ret		equ 52
-EXE_base	equ	56
-EXE_datapos	equ	60
-
-
 boot_disc:
 	
 	la		a0, text_cnf_read
@@ -148,6 +130,10 @@ boot_disc:
 	jal		ChangeClearRCnt
 	addiu	sp, -8
 	addiu	sp, 8
+	
+	; Turn off BIOS pad routine	
+	jal		StopPAD
+	nop
 	
 	ExitCriticalSection
 	
@@ -504,10 +490,11 @@ unlock_cdrom:						;; HC05 secret unlock boot method
 	jal		frame_done
 	move	a0, r0
 	
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -573,10 +560,11 @@ swap_trick:							;; Ez-swap boot method
 	
 disc_stopped:
 
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -609,10 +597,11 @@ disc_stopped:
 	jal		frame_done
 	move	a0, r0
 	
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -676,10 +665,11 @@ swap_start_disc:
 	
 swap_no_disc:
 	
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -712,10 +702,11 @@ swap_no_disc:
 	jal		frame_done
 	move	a0, r0
 	
-	addiu	a1, gp, VAR_padbuff
-	addiu	a2, r0, 34
-	jal		PadRead
-	move	a0, r0
+	; Disabled, temporarily replaced with BIOS pad
+	;addiu	a1, gp, VAR_padbuff
+	;addiu	a2, r0, 34
+	;jal		PadRead
+	;move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
