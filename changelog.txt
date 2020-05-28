@@ -1,3 +1,51 @@
+Version 0.25a (05-28-2020) by Lameguy64:
+
+* Inverted PC handshake logic in Xplorer comms which may improve reliability in
+  certain cases due to the way how /dev/parport works.
+  
+* Removed CD-ROM bootstrap routine replaced with using the BIOS' CD-ROM
+  bootstrap routine for increased compatibility and reduces the size of
+  n00bROM. Midbook bootstrap trick modified to allow jumping to the BIOS
+  bootstrap routine.
+
+* Fixed bug where uploading binary data can corrupt the stack. May not be
+  noticeable with PS-EXEs but may cause a crash when uploading more than one
+  binary file.  
+  
+* Added SystemErrorBootOrDiscFailure() hook to trap CD-ROM boot failures.
+  
+* Added dummy function hooks to serial TTY, Xplorer TTY and PCDRV devices to
+  avoid crashes when calling unsupported device functions.
+  
+* Added batch file for building n00bROM under Windows, eliminating the need for
+  MSys2 just to build n00bROM from source.
+  
+* Added support for downloading ROM image from Xplorer parallel port interface
+  in Flash Mode.
+  
+* Fixed bug where UNLK will display in the configuration string when exception
+  is enabled and not based on the boot mode setting.
+
+* Some code clean-up.
+  
+xpcomms updates:
+
+* Added PS-EXE upload auto retry.
+
+* Ported to Win32 using inpout32.
+
+* Added -dir option to specify PC file server initial directory.
+
+* Fixed typo where xpcomms is called xpsend in the help text.
+
+* Fixed select line reset not working due to a typo in xp_ClearPort()
+  function of libxplorer.
+  
+* Fixed binary upload option entering PCDRV server and TTY monitor mode.
+
+* Updated help text a bit.
+
+
 04-23-2020 by Lameguy64:
 
 * Replaced xpsend tool with the more capable xpcomms utility.

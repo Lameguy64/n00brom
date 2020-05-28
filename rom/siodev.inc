@@ -1,13 +1,5 @@
 ; Serial routines and TTY device hook
 
-
-sio_dev_name:
-	.asciiz "tty"
-sio_dev_info:
-	.asciiz "n00bROM SIOTTY device"
-.align 4
-
-
 sioInit_rom:
 	EnterCriticalSection
 	
@@ -28,7 +20,7 @@ sioInit_rom:
 	sh		v0, IMASK(a0)
 	
 	ExitCriticalSection
-	
+
 	jr		ra
 	nop
 	
@@ -112,26 +104,10 @@ InstallTTY_sio:
 	
 	lw		ra, 0(sp)
 	addiu	sp, 4
+sio_dev_dummy:
 	jr		ra
 	nop
-	
-
-sio_dev_init:
-	
-	;lui		a0, 0x1F80
-	
-	;li		v0, 0x40
-	;sh		v0, SIO_CTRL_REG(a0)
-	;li		v0, 0x4E
-	;sh		v0, SIO_MODE_REG(a0)
-	;li		v0, 0x12
-	;sh		v0, SIO_BAUD_REG(a0)
-	;li		v0, 0x15
-	;sh		v0, SIO_CTRL_REG(a0)
-	
-	jr		ra
-	nop
-	
+		
 	
 sio_dev_open:
 
@@ -227,25 +203,32 @@ rom_DelDev:
 	jr		t2
 	addiu	t1, r0, 0x48
 	
-	
+
+; Serial TTY IOB	
 siotty_dcb:
 	dw	sio_dev_name	; Device name
 	dw	0x3				; Flags
 	dw	0				; Size
 	dw	sio_dev_info	; Description
-	dw	sio_dev_init	; init
+	dw	sio_dev_dummy	; init
 	dw	sio_dev_open	; open
 	dw	sio_dev_inout	; inout
-	dw	0				; close
+	dw	sio_dev_dummy	; close
 	dw	sio_dev_ioctl	; ioctl
-	dw	0				; read
-	dw	0				; write
-	dw	0				; erase
-	dw	0				; undelete
-	dw	0				; firstfile
-	dw	0				; nextfile
-	dw	0				; format
-	dw	0				; chdir
-	dw	0				; rename
-	dw	0				; remove
-	dw	0				; testdevice
+	dw	sio_dev_dummy	; read
+	dw	sio_dev_dummy	; write
+	dw	sio_dev_dummy	; erase
+	dw	sio_dev_dummy	; undelete
+	dw	sio_dev_dummy	; firstfile
+	dw	sio_dev_dummy	; nextfile
+	dw	sio_dev_dummy	; format
+	dw	sio_dev_dummy	; chdir
+	dw	sio_dev_dummy	; rename
+	dw	sio_dev_dummy	; remove
+	dw	sio_dev_dummy	; testdevice
+
+sio_dev_name:
+	.asciiz "tty"
+sio_dev_info:
+	.asciiz "n00bROM SIOTTY device"
+.align 4

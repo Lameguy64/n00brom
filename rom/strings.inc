@@ -119,8 +119,8 @@ text_flash_title:
 .asciiz "-- Flash Mode --"
 
 text_flash_info:
-.ascii	"Upload ROM image with mcomms",0x10
-.ascii	"using the binary upload option.",0x10
+.ascii	"Upload ROM image using mcomms",0x10
+.ascii	"or xpcomms binary upload option.",0x10
 .ascii	"(ie. 'mcomms up n00brom.rom 0')",0x10
 .ascii	"Address parameter is ignored.",0x10
 .asciiz	"Only first 128KB can be flashed."
@@ -286,7 +286,7 @@ list_background:
 list_cart_type:
 .asciiz "Cartridge Type"
 list_off_switch:
-.asciiz	"OFF Switch Mode"
+.asciiz	"OFF Switch Action"
 list_exception:
 .asciiz	"Exception"
 list_home_screen:

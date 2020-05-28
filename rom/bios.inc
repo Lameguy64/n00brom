@@ -1,13 +1,3 @@
-getchar:
-	addiu	t2, r0, 0xA0
-	jr		t2
-	addiu	t1, r0, 0x3B
-	
-atoi:
-	addiu	t2, r0, 0xA0
-	jr		t2
-	addiu	t1, r0, 0x10
-	
 strcmp:
 	addiu	t2, r0, 0xA0
 	jr		t2
@@ -42,16 +32,6 @@ Exec:
 	addiu	t2, r0, 0xA0
 	jr		t2
 	addiu	t1, r0, 0x43
-
-FlushCache:
-	addiu	t2, r0, 0xA0
-	jr		t2
-	addiu	t1, r0, 0x44
-	
-LoadExec:
-	addiu	t2, r0, 0xA0
-	jr		t2
-	addiu	t1, r0, 0x51
 	
 	
 InitPAD:
@@ -84,21 +64,6 @@ HookEntryInt:
 	addiu	t2, r0, 0xB0
 	jr		t2
 	addiu	t1, r0, 0x19
-
-open:
-	addiu   t2, r0, 0xB0
-	jr      t2
-	addiu   t1, r0, 0x32
-
-read:
-	addiu   t2, r0, 0xB0
-	jr      t2
-	addiu   t1, r0, 0x34
-
-close:
-	addiu   t2, r0, 0xB0
-	jr      t2
-	addiu   t1, r0, 0x36
 	
 ChangeClearPAD:
 	addiu	t2, r0, 0xB0
@@ -110,7 +75,3 @@ ChangeClearRCnt:
 	jr		t2
 	addiu	t1, r0, 0x0A
 
-_96_init:
-	addiu   t2, r0, 0xA0
-	jr      t2
-	addiu   t1, r0, 0x71

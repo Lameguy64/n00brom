@@ -30,6 +30,7 @@ install_xp_pcdrv:
 	
 	lw		ra, 0(sp)
 	addiu	sp, 4
+xp_pcdrv_dummy:
 	jr		ra
 	nop
 	
@@ -481,11 +482,6 @@ xp_pcdrv_chdir:
 	lw		s1, 8(sp)
 	jr		ra
 	addiu	sp, 12
-
-
-xp_pcdrv_init:
-	jr		ra
-	nop
 	
 	
 xp_readbytes_rom:
@@ -579,23 +575,24 @@ xp_pcdrv_iob:
 	dw	0x10			; Device flags
 	dw	0x0				; Smallest logical block size
 	dw	xp_pcdrv_desc	; Device description/long name
-	dw	xp_pcdrv_init	; Init
+	dw	xp_pcdrv_dummy	; Init
 	dw	xp_pcdrv_open	; Open
-	dw	0				; in_out (only for TTY)
+	dw	xp_pcdrv_dummy	; in_out (only for TTY)
 	dw	xp_pcdrv_close	; Close
-	dw	0				; Ioctl
+	dw	xp_pcdrv_dummy	; Ioctl
 	dw	xp_pcdrv_read	; Read
 	dw	xp_pcdrv_write	; Write
-	dw	0				; Erase
-	dw	0				; Undelete
+	dw	xp_pcdrv_dummy	; Erase
+	dw	xp_pcdrv_dummy	; Undelete
 	dw	xp_pcdrv_ffile	; First file
 	dw	xp_pcdrv_nfile	; Next file
-	dw	0				; Format
+	dw	xp_pcdrv_dummy	; Format
 	dw	xp_pcdrv_chdir	; Chdir
-	dw	0				; Rename
-	dw	0				; Remove
-	dw	0				; Test device
-	
+	dw	xp_pcdrv_dummy	; Rename
+	dw	xp_pcdrv_dummy	; Remove
+	dw	xp_pcdrv_dummy	; Test device
+
+; PCDRV strings
 xp_pcdrv_name:
 .asciiz "pcdrv"
 xp_pcdrv_desc:

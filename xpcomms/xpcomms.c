@@ -5,23 +5,33 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
-#include <termios.h>
 #include <sys/file.h>
-#include <sys/ioctl.h>
 #include <sys/time.h>
+
+#ifndef __WIN32
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <linux/ppdev.h>
 #include <linux/parport.h>
+#else
+#include <conio.h>
+#include <windows.h>
+#include <inpout32.h>
+#endif // __WIN32
+
 #include <xplorer.h>
 #include "pcdrv.h"
 
-#define LPT_DEV "/dev/parport0"
+#define VERSION "0.25a"
 
-#define EXCHANGE_LEN	1048576
+#define LPT_DEV "/dev/parport0"
 
 int lpt_fd,action,do_exit;
 unsigned int upload_addr;
 
+#ifndef __WIN32
 const char *lpt_dev = LPT_DEV;
+#endif // __WIN32
 const char *send_file = NULL;
 
 
@@ -436,7 +446,7 @@ int uploadEXE(const char* exefile) {
 	
 	PSEXE exe;
 	EXEPARAM param;
-	int i,progress,last_progress;
+	int i,timeout,progress,last_progress;
 	
 	unsigned char* buffer;
 	unsigned int pos;
@@ -511,10 +521,20 @@ int uploadEXE(const char* exefile) {
 	
 	
 	// Commence upload
-	if( (i = xp_SendByte(lpt_fd, 'E')) )
+	timeout = 0;
+	while( i = xp_SendByte(lpt_fd, 'E') )
 	{
-		printf("Target not responding. %d\n", i);
-		return 1;
+		timeout++;
+		if( timeout > 10 )
+		{
+			printf("Target not responding.\n");
+			return 1;
+		}
+#ifndef __WIN32
+		usleep(1000);
+#else
+		Sleep(1);
+#endif // __WIN32
 	}
 	
 	if( xp_SendBytes(lpt_fd, (unsigned char*)&param, sizeof(EXEPARAM)) )
@@ -526,12 +546,12 @@ int uploadEXE(const char* exefile) {
 	gettimeofday(&otv, NULL);
 	
 	printf("Uploading executable file...\n");
-	printf("[");
+	printf(" ");
 	for(i=0; i<50; i++)
 	{
 		printf(".");
 	}
-	printf("]\r\e[1C");
+	printf("]\r[");
 	fflush(stdout);
 	
 	last_progress = 0;
@@ -630,12 +650,12 @@ int uploadBIN(const char *binfile, unsigned int addr)
 	
 	// Print out a progress bar
 	printf("Uploading binary file to address 0x%x...\n", addr);
-	printf("[");
+	printf(" ");
 	for(i=0; i<50; i++)
 	{
 		printf(".");
 	}
-	printf("]\r\e[1C");
+	printf("]\r[");
 	fflush(stdout);
 	
 	// Upload the binary data
@@ -674,6 +694,7 @@ int uploadBIN(const char *binfile, unsigned int addr)
 }
 
 
+#ifndef __WIN32
 struct termios orig_term;
 
 void enable_raw_mode()
@@ -700,6 +721,7 @@ void term_func(int signum)
 		exit(0);
 	}
 	
+	putchar('\n');
 	do_exit = 1;
 }
 
@@ -727,8 +749,7 @@ int getch()
         return c;
     }
 }
-
-
+/*
 void exit_lpt()
 {
 	int i;
@@ -741,34 +762,68 @@ void exit_lpt()
 	ioctl(lpt_fd, PPWDATA, &i);
 	ioctl(lpt_fd, PPFCONTROL, &frob);
 }
+*/
+#else
+BOOL WINAPI term_func(DWORD dwCtrlType)
+{
+	if( do_exit )
+	{
+		exit(0);
+	}
+	
+	putchar('\n');
+	do_exit = 1;
+}
+#endif // __WIN32
+
 
 int main(int argc, const char *argv[])
 {
-	int i,j;
+#ifndef __WIN32
 	struct sigaction st;
+#endif // __WIN32
+	int i,j;
 	char keypress[8];
+	int noserv;
 	int keypos,keynpos,keylen;
 	
-	printf("XPCOMMS - Xplorer comms utility for n00bROM\n");
+	printf("XPCOMMS " VERSION " - Xplorer comms utility for n00bROM\n");
 	printf("2020 Lameguy64 / Meido-Tek Productions\n\n");
 		
 	if( argc <= 1 )
 	{
-		printf("xpsend [-d <dev>] <run|up> <file> [addr]\n\n");
+#ifndef __WIN32
+		printf("xpcomms [-d <dev>] [-serv] [-noserv] <run|up> <file> [addr]\n\n");
+#else
+		printf("xpcomms [-port <addr>] [-serv] [-noserv] <run|up> <file> [addr]\n\n");
+#endif // __WIN32
 		printf("Arguments:\n");
+#ifndef __WIN32
 		printf("  -d <dev>         - Specify parallel port device to use.\n");
-		printf("  -serv            - Just enter file serving mode.\n");
-		printf("  run <exefile>    - Upload a PS-EXE/CPE or ELF executable.\n");
-		printf("  up <file> <addr> - Upload a binary file to the specified address.\n\n");
-		
+#else
+		printf("  -port <addr>     - Specify parallel port base address (default: 0x378).\n");
+#endif // __WIN32
+		printf("  -serv            - Only enter file server / tty monitor mode without action.\n");
+		printf("  -noserv          - Quit immediately, no file server/tty monitor.\n");
+		printf("  -dir <path>      - Specify initial directory for PC file server.\n\n");
+		printf("Actions:\n");
+		printf("  run <exefile>    - Upload PS-EXE, CPE or ELF executable.\n");
+		printf("  up <file> <addr> - Upload binary file to the specified memory address.\n\n");
 		return 0;
 	}
 	
+#ifdef __WIN32
+	// lpt_fd becomes parallel port base address under Winblows
+	lpt_fd = 0x378;
+#endif // __WIN32
+
 	action = 0;
+	noserv = 0;
 	for( i=1; i<argc; i++ )
 	{
 		if( argv[i][0] == '-' )
 		{
+#ifndef __WIN32
 			if( strcasecmp(argv[i], "-d") == 0 )
 			{
 				i++;
@@ -779,9 +834,40 @@ int main(int argc, const char *argv[])
 				}
 				lpt_dev = argv[i];
 			}
+#else
+			if( strcasecmp(argv[i], "-port") == 0 )
+			{
+				i++;
+				if( i >= argc )
+				{
+					printf("No port address specified.\n");
+					return EXIT_FAILURE;
+				}
+				lpt_fd = 0;
+				sscanf(argv[i], "%x", &lpt_fd);
+			}
+#endif // __WIN32
+			if( strcasecmp(argv[i], "-dir") == 0 )
+			{
+				i++;
+				if( i >= argc )
+				{
+					printf("Directory path not specified.\n");
+					return EXIT_FAILURE;
+				}
+				if( chdir(argv[i]) )
+				{
+					printf("Specified path not found.\n");
+					return EXIT_FAILURE;
+				}
+			}
 			if( strcasecmp(argv[i], "-serv") == 0 )
 			{
 				action = 3;
+			}
+			else if( strcasecmp(argv[i], "-noserv") == 0 )
+			{
+				noserv = 1;
 			}
 		}
 		else if( strcasecmp(argv[i], "run") == 0 )
@@ -827,6 +913,8 @@ int main(int argc, const char *argv[])
 		return EXIT_FAILURE;
 	}
 	
+#ifndef __WIN32
+
 	// Open parallel port
 	lpt_fd = open(lpt_dev, O_RDWR);
 	if( lpt_fd < 0 )
@@ -843,24 +931,45 @@ int main(int argc, const char *argv[])
 		return EXIT_FAILURE;
 	}
 	
+#else
+	
+	if( !IsInpOutDriverOpen() )
+	{
+		printf("inpout32 driver not open.\n");
+		return EXIT_FAILURE;
+	}
+
+	if( IsXP64Bit() )
+	{
+		printf("64-bit Winblows Detected.\n");
+	}
+	
+#endif // __WIN32
 	
 	xp_ClearPort(lpt_fd);
 	
 	
 	if( action == 1 )
 	{
-		uploadEXE(send_file);
+		if( uploadEXE(send_file) )
+			return EXIT_FAILURE;
 	}
 	else if( action == 2 )
 	{
-		uploadBIN(send_file, upload_addr);
+		if( uploadBIN(send_file, upload_addr) )
+			return EXIT_FAILURE;
 	}
 	
-	/*
-	i = xp_ReadByte(lpt_fd);
-	printf("Dummy read byte returned %d\n", i);
-	*/
+	if( noserv )
+	{
+#ifndef __WIN32
+		close(lpt_fd);
+#endif // __WIN32
+		return 0;
+	}
 	
+#ifndef __WIN32
+
 	// Set SIGINT handler for clean exit
 	do_exit = 0;
 	st.sa_handler = term_func;
@@ -869,16 +978,27 @@ int main(int argc, const char *argv[])
 	sigaction(SIGINT, &st, NULL);
 	
 	enable_raw_mode();
+
+#else
+	
+	SetConsoleCtrlHandler(term_func, TRUE);
+
+#endif // __WIN32
 	
 	pcdrv_init();
-	
-	printf("\nPC File Server active, press Ctrl+C to quit...\n\n");
-	
+		
 	keypos = 0;
 	keynpos = 0;
 	keylen = 0;
 	
-	do_exit = 0;
+	if( action < 2 )
+	{
+		printf("\nPC File Server and TTY Monitor active, press Ctrl+C to quit...\n\n");
+		do_exit = 0;
+	}
+	else
+		do_exit = 1;
+	
 	while( !do_exit )
 	{
 		while( kbhit() )
@@ -915,14 +1035,22 @@ int main(int argc, const char *argv[])
 			keylen--;
 		}
 		
+#ifndef __WIN32
 		usleep(100);
+#else
+		// Enough to keep xpcomms from pegging a thread/CPU,
+		// but not enough to miss stdin characters
+		Sleep(0);
+#endif // __WIN32
 	}
 
-	disable_raw_mode();
 	pcdrv_deinit();
 	//exit_lpt();
-	
+
+#ifndef __WIN32	
+	disable_raw_mode();
 	close( lpt_fd );
+#endif // __WIN32
 
 	printf("Clean exit.\n");	
 	

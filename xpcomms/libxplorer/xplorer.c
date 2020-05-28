@@ -10,19 +10,24 @@ static int error_count;
 void xp_ClearPort(int pport_fd)
 {
 	struct ppdev_frob_struct frob;
-	int val = 0;
-	
-	// Turn off select line
-	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= PARPORT_CONTROL_SELECT;
+	int i,val = 0;
 	
 	// Clear data output
-	ioctl(pport_fd, PPFCONTROL, &frob.val);
-	ioctl(pport_fd, PPFCONTROL, &frob.val);
 	ioctl(pport_fd, PPWDATA, &val);
-	
-	// Wait for ack line to become low
+
+	// Flip select line a number of times
+	for( i=0; i<4; i++ )
+	{
+		frob.mask	= PARPORT_CONTROL_SELECT;
+		frob.val	= PARPORT_CONTROL_SELECT;
+		ioctl(pport_fd, PPFCONTROL, &frob);
+		usleep(100);
+		frob.mask	= PARPORT_CONTROL_SELECT;
+		frob.val	= 0;
+		ioctl(pport_fd, PPFCONTROL, &frob);
+	}
 	/*
+	// Wait for ack line to become low
 	while( xp_ReadPending(pport_fd) )
 	{
 		usleep(100);
@@ -44,9 +49,9 @@ int xp_SendByte(int pport_fd, int byte)
 	struct ppdev_frob_struct frob;
 	int timeout,status;
 	
-	// Send the data and put select high
+	// Send the data and put select low
 	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= 0;
+	frob.val	= PARPORT_CONTROL_SELECT;
 	ioctl(pport_fd, PPWDATA, &byte);
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
@@ -57,7 +62,7 @@ int xp_SendByte(int pport_fd, int byte)
 	{
 		if( timeout > 100000 )
 		{
-			frob.val = PARPORT_CONTROL_SELECT;
+			frob.val = 0;
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			return 1;
@@ -66,8 +71,8 @@ int xp_SendByte(int pport_fd, int byte)
 		timeout++;
 	} while(!(status & PARPORT_STATUS_ACK));
 	
-	// Turn off select line
-	frob.val	= PARPORT_CONTROL_SELECT;
+	// Turn on select line
+	frob.val	= 0;
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
 	// Wait until ack signal goes low
@@ -77,7 +82,7 @@ int xp_SendByte(int pport_fd, int byte)
 	{
 		if( timeout > 100000 )
 		{
-			frob.val = PARPORT_CONTROL_SELECT;
+			frob.val = 0;
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			return 2;
@@ -120,7 +125,7 @@ retry:
 	{
 		if( timeout > 10000 )
 		{
-			frob.val = PARPORT_CONTROL_SELECT;
+			frob.val = 0;
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			return -1;
@@ -134,9 +139,9 @@ retry:
 		(((status & PARPORT_STATUS_PAPEROUT)>0)<<1)|
 		(((status & PARPORT_STATUS_BUSY)==0)<<2);
 	
-	// Put select high
+	// Put select low
 	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= 0;
+	frob.val	= PARPORT_CONTROL_SELECT;
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
 	// Wait until ack signal goes low
@@ -146,7 +151,7 @@ retry:
 	{
 		if( timeout > 10000 )
 		{
-			frob.val  = PARPORT_CONTROL_SELECT;
+			frob.val  = 0;
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			ioctl(pport_fd, PPFCONTROL, &frob);
 			return -1;
@@ -160,9 +165,9 @@ retry:
 		(((status & PARPORT_STATUS_PAPEROUT)>0)<<4)|
 		(((status & PARPORT_STATUS_BUSY)==0)<<5);
 		
-	// Put select low
+	// Put select high
 	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= PARPORT_CONTROL_SELECT;
+	frob.val	= 0;
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
 	// Wait until ack signal goes high
@@ -204,9 +209,9 @@ retry:
 	}
 	ioctl(pport_fd, PPWDATA, &i);
 	
-	// Put select high
+	// Put select low
 	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= 0;
+	frob.val	= PARPORT_CONTROL_SELECT;
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
 	// Wait until ack signal goes low
@@ -225,9 +230,9 @@ retry:
 		timeout++;
 	} while((status & PARPORT_STATUS_ACK));
 	
-	// Put select low
+	// Put select high
 	frob.mask	= PARPORT_CONTROL_SELECT;
-	frob.val	= PARPORT_CONTROL_SELECT;
+	frob.val	= 0;
 	ioctl(pport_fd, PPFCONTROL, &frob);
 	
 	if( parity_fail )

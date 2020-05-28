@@ -2,10 +2,10 @@ xp_readbyte:
 	lui		a0, XP_IOBASE			
 
 @@shake_wait:
-	lbu		v1, XP_pcshake(a0)		; Wait until PC -> XP handshake is high
+	lbu		v1, XP_pcshake(a0)		; Wait until PC -> XP handshake is low
 	nop
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait
+	bnez	v1, @@shake_wait
 	nop
 
 	lbu		v0, XP_data(a0)			; Read data in port
@@ -13,11 +13,11 @@ xp_readbyte:
 	li		v1, 0x8					; Set XP -> PC ack high
 	sb		v1, XP_latch(a0)
 	
-@@ack_wait:							; Wait until PC -> XP handshake is low
+@@ack_wait:							; Wait until PC -> XP handshake is high
 	lbu		v1, XP_pcshake(a0)
 	nop
 	andi	v1, 0x1
-	bnez	v1, @@ack_wait
+	beqz	v1, @@ack_wait
 	nop
 	
 	sb		r0, XP_latch(a0)		; Set XP -> PC ack low
@@ -116,11 +116,11 @@ xplorer_loader:
 
 xplorer_binloader:
 	
-	addiu	sp, -4
+	addiu	sp, -(8+BIN_len)
 	sw		ra, 0(sp)
+	sw		a0, 4(sp)
 	
-	subiu	sp, BIN_len			; Allocate stack for the binary download params
-	move	s0, sp
+	addiu	s0, sp, 8			; Allocate stack for the binary download params
 	
 	move	a0, s0				; Receive binary parameters
 	jal		xp_readbytes
@@ -130,11 +130,21 @@ xplorer_binloader:
 	jal		sort_status
 	nop
 	
+	lw		v0, 4(sp)			; Use fixed address if patch mode
+	lui		a0, 0xA001
+	bnez	v0, @@patch_addr
+	nop
 	lw		a0, BIN_addr(s0)	; Download binary file data
+@@patch_addr:
 	jal		xp_readbytes
 	lw		a1, BIN_size(s0)
 	
+	lw		v0, 4(sp)
+	lui		a0, 0x8001
+	bnez	v0, @@patch_addr_csum
+	nop
 	lw		a0, BIN_addr(s0)	; Checksum the executable
+@@patch_addr_csum:
 	lw		a1, BIN_size(s0)
 	jal		checksum
 	addiu	a2, r0, -1
@@ -142,7 +152,7 @@ xplorer_binloader:
 	lw		v1, BIN_crc32(s0)	; Test checksum
 	nop
 	beq		v0, v1, @@exit
-	nop
+	lw		v0, BIN_size(s0)
 
 	move	s0, r0
 
@@ -165,11 +175,11 @@ xplorer_binloader:
 	
 	blt		s0, 120, @@message_loop
 	addi	s0, 1
+	move	v0, r0
 	
 @@exit:
 	
-	addiu	sp, BIN_len
 	lw		ra, 0(sp)
-	addiu	sp, 4
+	addiu	sp, (8+BIN_len)
 	jr		ra
 	nop

@@ -1,9 +1,4 @@
-xptty_dev_info:
-	.asciiz "n00bROM XPTTY device"
-.align 4
-
-
-TIMEOUT_VAL equ 5000
+TIMEOUT_VAL equ 10000
 
 
 InstallTTY_xp:
@@ -19,7 +14,7 @@ InstallTTY_xp:
 	addiu	sp, -4
 	addiu	sp, 4
 	
-	la		a0, sio_dev_name	; Delete dummy TTY device
+	la		a0, sio_dev_name	; Delete existing TTY device
 	jal		rom_DelDev
 	addiu	sp, -4
 	addiu	sp, 4
@@ -42,15 +37,11 @@ InstallTTY_xp:
 	
 	lw		ra, 0(sp)
 	addiu	sp, 4
+xptty_dev_dummy:
 	jr		ra
 	nop
 	
 
-xptty_dev_init:
-	jr		ra
-	nop
-	
-	
 xptty_dev_open:
 	addi	v0, r0, 1
 	sw		v0, FCB_diskid(a0)
@@ -130,7 +121,7 @@ xptty_dev_ioctl:
 	nop							; the PS1's attention
 	andi	v0, 0x1
 	
-	beqz	v0, @@exit
+	bnez	v0, @@exit
 	addiu	v0, r0, -1
 	
 	move	v0, r0
@@ -138,40 +129,16 @@ xptty_dev_ioctl:
 @@exit:
 	jr		ra
 	nop
-	
-	
-xptty_dcb:
-	dw	sio_dev_name	; Device name
-	dw	0x3				; Flags
-	dw	0				; Size
-	dw	xptty_dev_info	; Description
-	dw	xptty_dev_init	; init
-	dw	xptty_dev_open	; open
-	dw	xptty_dev_inout	; inout
-	dw	0				; close
-	dw	xptty_dev_ioctl	; ioctl
-	dw	0				; read
-	dw	0				; write
-	dw	0				; erase
-	dw	0				; undelete
-	dw	0				; firstfile
-	dw	0				; nextfile
-	dw	0				; format
-	dw	0				; chdir
-	dw	0				; rename
-	dw	0				; remove
-	dw	0				; testdevice
-
 
 
 xp_readbyte_rom:
 	lui		t0, XP_IOBASE			
 
 @@shake_wait:
-	lbu		v1, XP_pcshake(t0)		; Wait until PC -> XP handshake is high
+	lbu		v1, XP_pcshake(t0)		; Wait until PC -> XP handshake is low
 	nop
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait
+	bnez	v1, @@shake_wait
 	nop
 
 	lbu		v0, XP_data(t0)			; Read data in port
@@ -179,14 +146,15 @@ xp_readbyte_rom:
 	li		v1, 0x8					; Set XP -> PC ack high
 	sb		v1, XP_latch(t0)
 	
-@@ack_wait:							; Wait until PC -> XP handshake is low
+@@ack_wait:							; Wait until PC -> XP handshake is high
 	lbu		v1, XP_pcshake(t0)
 	nop
 	andi	v1, 0x1
-	bnez	v1, @@ack_wait
+	beqz	v1, @@ack_wait
 	nop
 	
 	sb		r0, XP_latch(t0)		; Set XP -> PC ack low
+	sb		r0, XP_latch(t0)
 	
 	jr		ra
 	nop
@@ -204,14 +172,14 @@ xp_sendbyte_rom:
 @@retry:
 	
 @@wait_pcack:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	nop
 	andi	v1, 0x1
-	bnez	v1, @@wait_pcack
+	beqz	v1, @@wait_pcack
 	nop
 	
 	andi	v0, a0, 0x7				; Set first three bits
-	ori		v0, 0x8					; Brings ACK high
+	ori		v0, 0x8					; Bring ACK high to gain attention of host
 	sb		v0, XP_latch(a1)
 	
 	andi	v0, a0, 1				; Compute parity
@@ -225,10 +193,10 @@ xp_sendbyte_rom:
 	srl		a0, 1
 		
 @@shake_wait_1:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
 	nop
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait_1
+	bnez	v1, @@shake_wait_1
 	nop
 
 	andi	v0, a0, 0x7				; Set next three bits
@@ -245,10 +213,10 @@ xp_sendbyte_rom:
 	srl		a0, 1
 	
 @@shake_wait_2:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	nop
 	andi	v1, 0x1
-	bnez	v1, @@shake_wait_2
+	beqz	v1, @@shake_wait_2
 	nop	
 	
 	andi	v0, a0, 0x3				; Set the last two bits
@@ -267,10 +235,10 @@ xp_sendbyte_rom:
 	nop
 	
 @@shake_wait_3:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
 	nop
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait_3
+	bnez	v1, @@shake_wait_3
 	nop	
 	
 	sb		r0, XP_latch(a1)		; Clear ACK
@@ -278,10 +246,10 @@ xp_sendbyte_rom:
 	lbu		v0, XP_data(a1)			; Read data to check if transfer is okay
 
 @@shake_wait_4:
-	lbu		v1, XP_pcshake(a1)	; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	nop
 	andi	v1, 0x1
-	bnez	v1, @@shake_wait_4
+	beqz	v1, @@shake_wait_4
 	nop	
 	
 	bnez	v0, @@retry
@@ -304,12 +272,13 @@ xp_sendbyte_timeout_rom:
 	
 	move	t0, r0
 @@wait_pcack:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	addiu	t0, 1
 	bgt		t0, TIMEOUT_VAL, @@timeout
 	andi	v1, 0x1
-	bnez	v1, @@wait_pcack
-	nop
+	sw		at, 0(r0)
+	beqz	v1, @@wait_pcack
+	sw		at, 4(r0)
 	
 	andi	v0, a0, 0x7				; Set first three bits
 	ori		v0, 0x8					; Brings ACK high
@@ -327,13 +296,13 @@ xp_sendbyte_timeout_rom:
 	
 	move	t0, r0
 @@shake_wait_1:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
-	nop
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
 	addiu	t0, 1
 	bgt		t0, TIMEOUT_VAL, @@timeout
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait_1
-	nop
+	sw		at, 0(r0)
+	bnez	v1, @@shake_wait_1
+	sw		at, 4(r0)
 
 	andi	v0, a0, 0x7				; Set next three bits
 	sb		v0, XP_latch(a1)		; Leave ACK low
@@ -350,12 +319,13 @@ xp_sendbyte_timeout_rom:
 	
 	move	t0, r0
 @@shake_wait_2:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	addiu	t0, 1
 	bgt		t0, TIMEOUT_VAL, @@timeout
 	andi	v1, 0x1
-	bnez	v1, @@shake_wait_2
-	nop	
+	sw		at, 0(r0)
+	beqz	v1, @@shake_wait_2
+	sw		at, 4(r0)
 	
 	andi	v0, a0, 0x3				; Set the last two bits
 
@@ -374,12 +344,13 @@ xp_sendbyte_timeout_rom:
 	
 	move	t0, r0
 @@shake_wait_3:
-	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is low
 	addiu	t0, 1
 	bgt		t0, TIMEOUT_VAL, @@timeout
 	andi	v1, 0x1
-	beqz	v1, @@shake_wait_3
-	nop	
+	sw		at, 0(r0)
+	bnez	v1, @@shake_wait_3
+	sw		at, 4(r0)
 	
 	sb		r0, XP_latch(a1)		; Clear ACK
 
@@ -387,12 +358,13 @@ xp_sendbyte_timeout_rom:
 
 	move	t0, r0
 @@shake_wait_4:
-	lbu		v1, XP_pcshake(a1)	; Wait until PC -> XP handshake is low
+	lbu		v1, XP_pcshake(a1)		; Wait until PC -> XP handshake is high
 	addiu	t0, 1
 	bgt		t0, TIMEOUT_VAL, @@timeout
 	andi	v1, 0x1
-	bnez	v1, @@shake_wait_4
-	nop
+	sw		at, 0(r0)
+	beqz	v1, @@shake_wait_4
+	sw		at, 4(r0)
 	
 	bnez	v0, @@retry
 	lw		a0, 0(sp)
@@ -408,3 +380,32 @@ xp_sendbyte_timeout_rom:
 	
 	jr		ra
 	addiu	sp, 4
+
+
+; Xplorer TTY IOB
+xptty_dcb:
+	dw	sio_dev_name	; Device name
+	dw	0x3				; Flags
+	dw	0				; Size
+	dw	xptty_dev_info	; Description
+	dw	xptty_dev_dummy	; init
+	dw	xptty_dev_open	; open
+	dw	xptty_dev_inout	; inout
+	dw	xptty_dev_dummy	; close
+	dw	xptty_dev_ioctl	; ioctl
+	dw	xptty_dev_dummy	; read
+	dw	xptty_dev_dummy	; write
+	dw	xptty_dev_dummy	; erase
+	dw	xptty_dev_dummy	; undelete
+	dw	xptty_dev_dummy	; firstfile
+	dw	xptty_dev_dummy	; nextfile
+	dw	xptty_dev_dummy	; format
+	dw	xptty_dev_dummy	; chdir
+	dw	xptty_dev_dummy	; rename
+	dw	xptty_dev_dummy	; remove
+	dw	xptty_dev_dummy	; testdevice
+
+
+xptty_dev_info:
+	.asciiz "n00bROM XPTTY device"
+.align 4

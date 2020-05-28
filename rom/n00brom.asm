@@ -1,30 +1,32 @@
 .psx
 
+version			equ "0.22a"
+
 .include "cop0regs.inc"
 .include "hwregs.inc"
 .include "structs.inc"
 
-PROG_addr	equ		0x801EFFF0
-SP_base		equ		0x801ffff0
+PROG_addr		equ	0x801EFFF0
+SP_base			equ	0x801ffff0
 
 
-VAR_vsync	equ		0
-VAR_clut	equ		4
-VAR_db		equ		8
-VAR_ot		equ		12
-VAR_paddr	equ		16
-VAR_cdcmd	equ		20		; CD sync stuff
-VAR_cdiwait	equ		21
-VAR_cdinum	equ		22
-VAR_cdival	equ		23
-VAR_cdresp	equ		24		; CD response buffer
-VAR_psexe	equ		40
-VAR_padbuff	equ		72
-VAR_siobuff	equ		140
-VAR_sioaddr	equ		148
-VAR_sioread	equ		152
-VAR_xpready	equ		156
-VAR_pbuff	equ		160
+VAR_vsync		equ	0
+VAR_clut		equ	4
+VAR_db			equ	8
+VAR_ot			equ	12
+VAR_paddr		equ	16
+VAR_cdcmd		equ	20		; CD sync stuff
+VAR_cdiwait		equ	21
+VAR_cdinum		equ	22
+VAR_cdival		equ	23
+VAR_cdresp		equ	24		; CD response buffer
+VAR_psexe		equ	40
+VAR_padbuff		equ	72
+VAR_siobuff		equ	140
+VAR_sioaddr		equ	148
+VAR_sioread		equ	152
+VAR_xpready		equ	156
+VAR_pbuff		equ	160
 
 
 SET_vmode		equ	0		; Video mode
@@ -37,9 +39,9 @@ SET_offact		equ	6		; Off switch action
 SET_bg			equ	7		; Background
 SET_homemode	equ	8		; Home screen mode
 
-BRK_vector	equ		0xa0000040
-BRK_addr	equ		0x80030000
-prog_dest	equ		0x801EFFF0
+BRK_vector		equ	0xa0000040
+BRK_addr		equ	0x80030000
+prog_dest		equ	0x801EFFF0
 
 
 .macro rfe
@@ -57,7 +59,7 @@ prog_dest	equ		0x801EFFF0
 .endmacro
 
 
-;; RAM resident program
+;; RAM resident code
 .create "ramprog.bin", PROG_addr-8
 
 	dw		PROG_addr				; Simple header for copy routine in ROM
@@ -65,7 +67,10 @@ prog_dest	equ		0x801EFFF0
 	
 program_start:
 
-	la		sp, SP_base
+	;la		sp, SP_base
+	
+	addiu	sp, -4
+	sw		ra, 0(sp)
 	
 	addiu	sp, -INT_size		; INT hook entry structure
 	move	s0, sp
@@ -124,6 +129,10 @@ program_start:
 	sw		v0, DPCR(a0)
 	sw		r0, DICR(a0)		; Clear DICR (not needed)
 	
+	la		a0, install_syserr	; Install syserr function hooks
+	jalr	a0
+	nop
+	
 	la		v1, config
 	lbu		v1, SET_except(v1)
 	
@@ -148,10 +157,11 @@ program_start:
 	sb		r0, XP_latch(a0)	; Clear latch
 	andi	v0, 0x1
 	sb		v0, VAR_xpready(gp)
-
+	sb		r0, XP_latch(a0)
+	
 @@skip_xplorer:
 
-	la		v0, config
+	la		v0, config			; Install pcdrv device for Xplorer
 	lbu		v0, SET_pcdrv(v0)
 	nop
 	beqz	v0, @@skip_pcdrv
@@ -163,11 +173,164 @@ program_start:
 	
 @@skip_pcdrv:
 
-	j		main				; Jump to main
+	jal		main				; Jump to main
 	rfe
+	
+	; Exit routine (uses BIOS bootstrap routine)
+	
+	EnterCriticalSection
+	
+	jal		StopPAD
+	nop
+	jal		HookDefaultInt
+	nop
+	
+	addiu	a0, r0, 1
+	jal		ChangeClearPAD
+	addiu	sp, -4
+	addiu	sp, 4
+	li		a0, 3
+	addiu	a1, r0, 1
+	jal		ChangeClearRCnt
+	addiu	sp, -8
+	addiu	sp, 8
+	
+	addiu	sp, INT_size
+	addiu	sp, 1024
+	lw		ra, 0(sp)
+	addiu	sp, 4
+	jr		ra
+	nop
+	
+
+main:
+
+	addiu	sp, -4
+	sw		ra, 0(sp)
+	
+	jal		init					; do init
+	nop
+		
+	la		a0, config				; Get switch setting
+	lbu		a0, SET_carttype(a0)
+	nop
+	beqz	a0, @@return_to_idle
+	nop
+	beq		a0, 1, @@switch_par
+	nop
+	lui		a0, 0x1F06				; Xplorer switch detection
+	lbu		a0, 0(a0)
+	nop
+	andi	a0, 0x1
+	beqz	a0, @@do_quickboot
+	nop
+	b		@@return_to_idle
+	nop
+@@switch_par:						; PAR/GS switch detection
+	lui		a0, 0x1F02
+	lbu		a0, 0x18(a0)
+	nop
+	andi	a0, 0x1
+	beqz	a0, @@do_quickboot
+	nop	
+	
+@@return_to_idle:
+
+	jal		idle_screen
 	nop
 
+	move	a0, r0					; Stop SIO receive
+	jal		sioSetRead
+	move	a1, r0
 
+	beqz	v0, @@boot
+	nop
+	
+	jal		rom_menu
+	nop
+	
+	beqz	v0, @@return_to_idle
+	nop
+	
+	beq		v0, 2, flash_mode
+	nop
+	
+	EnterCriticalSection			; Reset
+	
+	lui		a0, 0xBFC0
+	jr		a0
+	nop
+	
+@@do_quickboot:
+	
+	la		v0, config
+	lbu		v0, SET_offact(v0)
+	nop
+	move	s0, r0
+	
+@@wait:
+	la		a0, text_quick_boot
+	jal		sort_status
+	nop
+	blt		s0, 60, @@wait
+	addiu	s0, 1
+	
+@@boot:
+
+	jal		boot_setup
+	nop
+	beqz	v0, @@return_to_idle
+	nop
+	
+@@exit:
+
+	la		a0, text_booting
+	jal		sort_status
+	nop
+
+	lw		ra, 0(sp)
+	addiu	sp, 4
+	jr		ra
+	nop
+	
+
+boot_setup:							; Performs swap trick or unlock depending
+									; on configuration
+	addiu	sp, -4
+	sw		ra, 0(sp)
+	
+	la		v0, config
+	lbu		v0, SET_bmode(v0)
+	nop
+	beq		v0, 1, @@unlock_boot
+	nop
+	beq		v0, 2, @@swap_boot
+	nop
+	b		@@return
+	addiu	v0, r0, 1
+
+@@unlock_boot:
+	jal		init_disc
+	nop
+	jal		unlock_cdrom
+	nop
+	b		@@return
+	nop
+	
+@@swap_boot:
+	jal		init_disc
+	nop
+	jal		swap_trick
+	nop
+
+@@return:
+
+	lw		ra, 0(sp)
+	addiu	sp, 4
+	jr		ra
+	nop
+
+	
 init:
 
 	addiu	sp, -4
@@ -199,8 +362,7 @@ init:
 	sw		v0, VAR_padbuff+8(gp)
 	sw		v0, VAR_padbuff+12(gp)
 	
-	
-	;jal		PadInit					; Initialize pad interface
+	;jal		PadInit				; Initialize pad interface
 	;nop
 	
 	; Use BIOS routines as custom routines are borked for PAL units
@@ -215,7 +377,7 @@ init:
 	jal		StartPAD
 	nop
 	
-	move	a0, r0				; Disable VSync IRQ auto acknowledge
+	move	a0, r0					; Disable VSync IRQ auto acknowledge
 	jal		ChangeClearPAD
 	addiu	sp, -4
 	addiu	sp, 4
@@ -232,9 +394,7 @@ init:
 	beq		v0, 2, @@xp_tty
 	nop
 	
-	; Install serial TTY
-	
-	la		a0, InstallTTY_sio
+	la		a0, InstallTTY_sio		; Install serial TTY if enabled
 	jalr	a0
 	nop
 	
@@ -243,7 +403,7 @@ init:
 	
 @@xp_tty:
 
-	la		a0, InstallTTY_xp
+	la		a0, InstallTTY_xp		; Install Xplorer TTY if enabled
 	jalr	a0
 	nop
 	
@@ -253,120 +413,8 @@ init:
 	addiu	sp, 4
 	jr		ra
 	nop
-		
 
-main:
-
-	jal		init					; do init
-	nop
 	
-	la		a0, config				; Get switch setting
-	lbu		a0, SET_carttype(a0)
-	nop
-	beqz	a0, back_to_menu
-	nop
-	beq		a0, 1, @@switch_par
-	nop
-	
-	lui		a0, 0x1F06				; Xplorer switch detection
-	lbu		a0, 0(a0)
-	nop
-	andi	a0, 0x1
-	beqz	a0, @@do_quickboot
-	nop
-	
-	b		back_to_menu
-	nop
-	
-@@switch_par:						; PAR/GS switch detection
-
-	lui		a0, 0x1F02
-	lbu		a0, 0x18(a0)
-	nop
-	andi	a0, 0x1
-	beqz	a0, @@do_quickboot
-	nop
-	
-@@do_quickboot:
-	
-	la		v0, config
-	lbu		v0, SET_offact(v0)
-	nop
-	
-	
-	move	s0, r0
-@@wait:
-	la		a0, text_quick_boot
-	jal		sort_status
-	nop
-	blt		s0, 60, @@wait
-	addiu	s0, 1
-	
-	b		boot
-	nop
-	
-back_to_menu:
-
-	jal		idle_screen
-	nop
-
-	move	a0, r0					; Stop SIO receive
-	jal		sioSetRead
-	move	a1, r0
-
-	beqz	v0, boot
-	nop
-	
-	jal		rom_menu
-	nop
-	
-	beqz	v0, back_to_menu
-	nop
-	
-	beq		v0, 2, flash_mode
-	nop
-	
-	EnterCriticalSection			; Reset
-	
-	lui		a0, 0xBFC0
-	jr		a0
-	nop
-	
-
-boot:								; Boot routine
-
-	la		v0, config
-	lbu		v0, SET_bmode(v0)
-	nop
-	beq		v0, 1, @@unlock_boot
-	nop
-	beq		v0, 2, @@swap_boot
-	nop
-	
-	jal		init_disc
-	nop
-	j		boot_disc
-	nop
-
-@@unlock_boot:
-	jal		init_disc
-	nop
-	jal		unlock_cdrom
-	nop
-	beqz	v0, back_to_menu
-	nop
-	j		boot_disc
-	nop
-	
-@@swap_boot:
-	jal		init_disc
-	nop
-	jal		swap_trick
-	nop
-	j		boot_disc
-	nop
-
-
 init_disc:							;; Low-level CD init
 
 	addiu	sp, -4
@@ -565,7 +613,7 @@ idle_screen:
 @@no_except:
 
 	la		v0, config
-	lbu		v0, SET_except(v0)
+	lbu		v0, SET_bmode(v0)
 	nop
 	beq		v0, 1, @@is_unlock
 	nop
@@ -640,7 +688,6 @@ idle_screen:
 	jal		frame_done
 	move	a0, r0
 	
-	
 	la		v0, config
 	lbu		v0, SET_carttype(v0)	; Skip Xplorer stuff if not set for Xplorer
 	nop
@@ -649,45 +696,46 @@ idle_screen:
 	
 	lbu		v0, VAR_xpready(gp)
 	nop
-	beqz	v0, @@xp_ready
+	bnez	v0, @@xp_ready
 	nop
 	
 	lui		a0, XP_IOBASE			; Check data and handshake
-	lbu		v1, XP_pcshake(a0)
-	lbu		v0, XP_data(a0)
-	andi	v1, 0x1
-	add		v0, v1
-	bnez	v0, @@skip_xp
+	lbu		v0, XP_pcshake(a0)
+	;lbu		v0, XP_data(a0)
+	nop
+	andi	v0, 0x1
+	;add		v0, v1
+	beqz	v0, @@skip_xp
 	nop
 	
-	b		@@skip_xp				; Clear ready value if handshake
-	sb		r0, VAR_xpready(gp)		; and data is zeroed
+	addiu	v0, r0, 1
+	b		@@skip_xp				; Set ready value if handshake
+	sb		v0, VAR_xpready(gp)		; and data is zeroed
 	
 @@xp_ready:
 
-	lui		a0, XP_IOBASE			; Check if handshake went high
+	lui		a0, XP_IOBASE			; Check if handshake went low
 	lbu		v0, XP_pcshake(a0)
 	nop
 	andi	v0, 0x1
-	beqz	v0, @@skip_xp
+	bnez	v0, @@skip_xp
 	nop
 	
 	lbu		v0, XP_data(a0)			; Check if data is set to the correct value
 	nop
-	beq		v0, 'E', do_xploader
+	beq		v0, 'E', @@do_xploader
 	nop
-	beq		v0, 'B', do_xpbinloader
+	beq		v0, 'B', @@do_xpbinloader
 	nop
 
 @@skip_xp:
-
 	
 	addiu	a0, gp, VAR_siobuff		; SIO PS-EXE loader
 	la		a1, str_mexe
 	jal		strcmp
 	addiu	sp, -8
 	addiu	sp, 8
-	beqz	v0, do_loader
+	beqz	v0, @@do_loader
 	nop
 	
 	addiu	a0, gp, VAR_siobuff		; SIO binary loader
@@ -696,7 +744,7 @@ idle_screen:
 	addiu	sp, -8
 	addiu	sp, 8
 	lw		a0, VAR_sioread(gp)
-	beqz	v0, do_binloader
+	beqz	v0, @@do_binloader
 	nop
 	
 	addiu	a0, gp, VAR_siobuff		; SIO patch loader
@@ -705,7 +753,7 @@ idle_screen:
 	addiu	sp, -8
 	addiu	sp, 8
 	lw		a0, VAR_sioread(gp)
-	beqz	v0, do_patloader
+	beqz	v0, @@do_patloader
 	nop
 	
 	bnez	a0, @@skip_sio_reset
@@ -714,7 +762,7 @@ idle_screen:
 	addiu	a0, gp, VAR_siobuff
 	jal		sioSetRead
 	addiu	a1, r0, 4
-		
+	
 @@skip_sio_reset:
 	
 	; Disabled, temporarily replaced with BIOS pad
@@ -740,6 +788,40 @@ idle_screen:
 	b		@@loop
 	nop
 	
+@@do_xploader:
+	jal		xp_readbyte				; To flush the PS-EXE download command
+	nop
+	jal		xplorer_loader
+	nop
+	b		@@loop
+	nop
+	
+@@do_xpbinloader:
+	jal		xp_readbyte
+	nop
+	jal		xplorer_binloader
+	move	a0, r0
+	b		@@loop
+	nop
+	
+@@do_loader:
+	jal		sio_loader
+	nop
+	b		@@loop
+	nop
+	
+@@do_binloader:
+	jal		sio_binloader
+	move	a0, r0
+	b		@@loop
+	nop
+	
+@@do_patloader:
+	jal		sio_binloader
+	addiu	a0, r0, 1
+	b		@@loop
+	nop
+	
 @@exit_boot:
 	
 	b		@@exit
@@ -755,41 +837,6 @@ idle_screen:
 	lw		ra, 0(sp)
 	addiu	sp, 4
 	jr		ra
-	nop
-	
-	
-do_xploader:
-	jal		xp_readbyte				; To flush the PS-EXE download command
-	nop
-	jal		xplorer_loader
-	nop
-	b		back_to_menu
-	nop
-	
-do_xpbinloader:
-	jal		xp_readbyte
-	nop
-	jal		xplorer_binloader
-	nop
-	b		back_to_menu
-	nop
-	
-do_loader:
-	jal		sio_loader
-	nop
-	b		back_to_menu
-	nop
-	
-do_binloader:
-	jal		sio_binloader
-	move	a0, r0
-	b		back_to_menu
-	nop
-	
-do_patloader:
-	jal		sio_binloader
-	addiu	a0, r0, 1
-	b		back_to_menu
 	nop
 	
 	
@@ -840,9 +887,9 @@ reg2hex:
 
 .include "flash.inc"
 .include "cd.inc"
+.include "cdtricks.inc"
 .include "gfx.inc"
 .include "rom_menu.inc"
-.include "boot.inc"
 .include "gpu.inc"
 .include "bios.inc"
 .include "tim.inc"
@@ -984,16 +1031,19 @@ program_end:
 .close
 
 
-
 .create "romhead.bin", 0x1f000000	;; ROM header and start code
 
 header:			; ROM header
 	
-	; Postboot vector
+	; Postboot vector (not used)
 	
-	.word	dummy
-	.ascii	"Licensed by Sony Computer Entertainment Inc."
-	.ascii 	"Not officially licensed or endorsed by Sony Computer Entertainment Inc."
+	.word	0
+	.ascii 	"n00bROM "
+	.ascii	version
+	.ascii	" by Lameguy64 of Meido-Tek Productions"
+	.ascii	" build "
+	.asciiz build_date
+	.asciiz	"https://github.com/lameguy64/n00brom"
 	
 	.align	0x80					; This keeps things in the header aligned
 	
@@ -1001,10 +1051,8 @@ header:			; ROM header
 	
 	.word	preboot
 	.ascii	"Licensed by Sony Computer Entertainment Inc."
-	.ascii 	"n00bROM "
-	.ascii	version
-	.asciiz	" by Lameguy64 of Meido-Tek Productions"
-	
+	.ascii	"Not officially licensed or endorsed by Sony "
+	.ascii	"Computer Entertainment"
 	.align	0x80					; This keeps things in the header aligned
 
 	
@@ -1015,15 +1063,16 @@ header:			; ROM header
 config:
 	db		0					; Video mode
 	db		0					; CD-ROM boot mode
-	db		0					; TTY redirect
-	db		0					; PCDRV
+	db		0					; TTY redirect mode
+	db		0					; PCDRV enable
 	db		0					; Exception handler enable
 	db		0					; Switch type
 	db		0					; Off switch action
 	db		0					; Background
 	db		0					; Home screen
 
-.align		0x100				; Align to 256 byte block boundary
+.align		0x100				; Pad to align to the 256 byte block boundary
+								; for saving options easily
 
 	
 preboot:		; Preboot code (installs break vector and sets breakpoint)
@@ -1096,14 +1145,43 @@ preboot:		; Preboot code (installs break vector and sets breakpoint)
 	jr		ra					; Return to BIOS bootcode (if switch is off)
 	nop
 	
+	
+	
+; The first phase of this midboot bootstrap trick is triggered by a data access
+; breakpoint on the BIOS shell's target address. The memcpy function used to
+; copy the shell is skipped by simply returning from exception to the address 
+; in the ra register which exits the function prematurely. This shouldn't be
+; much of a problem as the memcpy function usually doesn't use the stack.
+;
+; The second phase is when the BIOS attempts to jump to the shell's target
+; address which will trigger the program counter breakpoint. At this point,
+; n00bROM is bootstrapped, but the return address to the BIOS is preserved as
+; it is needed for using the BIOS' CD-ROM bootstrap routine initiated by simply
+; jumping to that address.
 
-dummy:			; Dummy vector for postboot
+; n00bROM effectively replaces the shell more or less.
+
+	
+start:			; ROM start code (executed by break vector)
+	
+	mfc0	v0, DCIC			
+	nop							
+	andi	v0, 0x10			; Check if data access breakpoint
+	beqz	v0, not_memcpy		; If not, bootstrap n00bROM
+	nop
+	
+	lui		v0, 0xe180			; Break on program counter for second phase
+	mtc0	v0, DCIC
+	nop
+	nop
 	jr		ra
 	nop
 	
+not_memcpy:
 	
-start:			; ROM start code (executed by break vector)
-
+	addiu	sp, -4
+	sw		ra, 0(sp)
+	
 	la		a0, program_pos		; Copy n00bROM code to RAM
 	lw		a1, 0(a0)
 	lw		a2, 4(a0)
@@ -1121,8 +1199,17 @@ start:			; ROM start code (executed by break vector)
 	la		a0, program_pos		; Jump execution to copied n00bROM code
 	lw		a0, 0(a0)
 	nop
-	jr		a0
+	jalr	a0
 	nop
+	
+	li		a0, 0x8000DFFC		; Make sure s_needsCDRomReset is zero for
+	sw		r0, 0(a0)			; swap trick to work (thanks nicolasnoble)
+	
+	lw		ra, 0(sp)
+	addiu	sp, 4
+	jr		ra
+	nop
+	
 
 ; Strings and program data stay in ROM
 
@@ -1142,6 +1229,7 @@ build_string:
 .include "siodev.inc"
 .include "xp_tty.inc"
 .include "xp_pcdrv.inc"
+.include "syserr.inc"
 .include "exhandler.inc"
 .include "strings.inc"
 .include "tables.inc"

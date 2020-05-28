@@ -1,3 +1,5 @@
+; Exception handler, for trapping unhandled exceptions
+
 prevhook	equ	0xA000D000
 
 ST_at		equ	0
@@ -39,7 +41,7 @@ ST_temp		equ	134
 
 install_exception:
 	
-	la		v1, prevhook
+	la		v1, prevhook				; Installs a CPU exception monitor
 	la		a0, exception
 	li		a1, (exception_end-exception)
 @@copy_loop:
@@ -311,7 +313,7 @@ exception_fail:
 @@end:
 	b		@@end
 	nop
-	
+		
 	
 ex_drawtext:
 	addiu	sp, -4
@@ -833,44 +835,32 @@ crash_msg:
 	
 crash_int:
 	.asciiz	"INTERRUPT"
-	.align	0x4
 crash_tlbmod:
 	.asciiz "TLB MODIFICATION"
-	.align	0x4
 crash_tlbload:
 	.asciiz "TLB LOAD"
-	.align	0x4
 crash_tlbstore:
 	.asciiz "TLB STORE"
-	.align	0x4
 crash_addrload:
 	.asciiz "ADDR ERROR LOAD / INST. FETCH"
-	.align	0x4
 crash_addrstore:
 	.asciiz "ADDR ERROR STORE"
-	.align	0x4
 crash_busfetch:
 	.asciiz	"BUS ERROR INSTRUCTION FETCH"
-	.align	0x4
 crash_busload:
 	.asciiz	"BUS ERROR DATA LOAD/STORE"
-	.align	0x4
 crash_syscall:
 	.asciiz "SYSTEM CALL"
-	.align	0x4
 crash_break:
 	.asciiz "BREAKPOINT / BREAK INSTRUCTION"
-	.align	0x4
 crash_reserve:
 	.asciiz "RESERVED INSTRUCTION"
-	.align	0x4
 crash_cop:
 	.asciiz "COPROCESSOR UNUSABLE"
-	.align	0x4
 crash_overflow:
 	.asciiz "ARITHMETIC OVERFLOW"
-	.align	0x4
 
+	.align	0x4
 ex_font_image:
 	.incbin "exfont.tim"
 	.align	0x4

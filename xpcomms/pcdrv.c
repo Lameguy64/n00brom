@@ -2,20 +2,29 @@
 #include <string.h>
 #include <unistd.h>
 #include <malloc.h>
-#include <fnmatch.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
+#ifndef __WIN32
+#include <fnmatch.h>
+#else
+#include <windows.h>
+#include <winerror.h>
+#endif
 #include <xplorer.h>
 #include "pcdrv.h"
 
 
 static FILE *pcdrv_fd[PCDRV_MAXFILES];
 
+#ifndef __WIN32
 static DIR *pcdrv_dir;
 static char *pcdrv_dir_pattern;
 static char *pcdrv_dir_base;
+#else
+static HANDLE hFind;
+#endif
 
 void pcdrv_init(void)
 {
@@ -23,10 +32,14 @@ void pcdrv_init(void)
 	
 	for( i=0; i<PCDRV_MAXFILES; i++ )
 		pcdrv_fd[i] = NULL;
-		
+
+#ifndef __WIN32	
 	pcdrv_dir = NULL;
 	pcdrv_dir_pattern = NULL;
 	pcdrv_dir_base = NULL;
+#else
+	hFind = INVALID_HANDLE_VALUE;
+#endif
 }
 
 void pcdrv_deinit(void)
@@ -41,8 +54,13 @@ void pcdrv_deinit(void)
 	}
 	
 	// Close open directory query
+#ifndef __WIN32
 	if( pcdrv_dir )
 		closedir(pcdrv_dir);
+#else
+	if( hFind != INVALID_HANDLE_VALUE )
+		FindClose(hFind);
+#endif
 }
 
 void pcdrv_open(int lpt_fd)
@@ -66,14 +84,14 @@ void pcdrv_open(int lpt_fd)
 	{
 		if( (i & PCDRV_FAPPEND) )
 		{
-			fmode = "a+";
+			fmode = "ab+";
 		}
 		else
 		{
 			if( (i & PCDRV_FCREATE ) || (i & PCDRV_FTRUNC ) )
-				fmode = "w+";
+				fmode = "wb+";
 			else
-				fmode = "r+";
+				fmode = "rb+";
 		}
 	}
 	else if( (i & PCDRV_FREAD) )
@@ -83,9 +101,9 @@ void pcdrv_open(int lpt_fd)
 	else if( (i & PCDRV_FWRITE) )
 	{
 		if( (i & PCDRV_FCREATE ) || (i & PCDRV_FTRUNC ) )
-			fmode = "w";
+			fmode = "wb";
 		else
-			fmode = "a";
+			fmode = "ab";
 	}
 	
 	if( fmode == NULL )
@@ -404,7 +422,11 @@ retry:
 		printf("PCDRV write: Checksum error, retrying.\n");
 		
 		// Do transfer retry
+#ifndef __WIN32
 		usleep(1000);
+#else
+		Sleep(1);
+#endif
 		xp_SendByte(lpt_fd, PCDRV_ECSUM);
 		
 		goto retry;
@@ -455,9 +477,13 @@ retry:
 
 void pcdrv_firstfile(int lpt_fd)
 {
-	int i,j;
+#ifndef __WIN32
 	struct stat fs;
 	struct dirent *dir;
+#else
+	WIN32_FIND_DATA FindFileData;
+#endif
+	int i,j;
 	char *dir_pattern;
 	char *c;
 	
@@ -479,6 +505,8 @@ void pcdrv_firstfile(int lpt_fd)
 	}
 	dir_pattern[j] = 0;
 	
+#ifndef __WIN32
+
 	// Clear previously allocated directory strings
 	if( pcdrv_dir_pattern )
 		free(pcdrv_dir_pattern);
@@ -502,13 +530,12 @@ void pcdrv_firstfile(int lpt_fd)
 	
 	free(dir_pattern);
 	
-	
-	printf("PCDRV firstfile: Opening directory %s...\n", pcdrv_dir_base);
-	
 	// Open directory
+	printf("PCDRV firstfile: Opening directory %s...\n", pcdrv_dir_base);
+
 	if( pcdrv_dir )
 		closedir(pcdrv_dir);
-		
+	
 	i = 0;
 	if( !(pcdrv_dir = opendir(pcdrv_dir_base)) )
 	{
@@ -524,7 +551,7 @@ void pcdrv_firstfile(int lpt_fd)
 			break;
 		case ENOTDIR:
 			printf("PCDRV firstfile: Name is not a directory.\n");
-			i = PCDRV_ENOENT;
+			i = PCDRV_ENOTDIR;
 			break;
 		default:
 			printf("PCDRV firstfile: Undefined error (%d).\n", errno);
@@ -532,13 +559,62 @@ void pcdrv_firstfile(int lpt_fd)
 		}
 	}
 	
+#else
+
+	if( hFind != INVALID_HANDLE_VALUE )
+		FindClose(hFind);
+	
+	i = 0;
+	hFind = FindFirstFile(dir_pattern, &FindFileData);
+	if( hFind == INVALID_HANDLE_VALUE )
+	{
+		if( GetLastError() == ERROR_FILE_NOT_FOUND )
+		{
+			xp_SendByte(lpt_fd, 0);
+			xp_SendBytes(lpt_fd, (unsigned char*)&i, 4);
+			xp_SendByte(lpt_fd, 0);
+			xp_SendByte(lpt_fd, 0);
+			return;
+		}
+		
+		switch( GetLastError() )
+		{
+		case ERROR_ACCESS_DENIED:
+			printf("PCDRV firstfile: Permission denied.\n");
+			i = PCDRV_EPERM;
+			break;
+		case ERROR_PATH_NOT_FOUND:
+			printf("PCDRV firstfile: Name is not a directory.\n");
+			i = PCDRV_ENOENT;
+			break;
+		default:
+			printf("PCDRV firstfile: FindFirstFile() failed (%d)\n", GetLastError());
+			i = PCDRV_EUNDEF;
+		}
+	}
+	
+	free(dir_pattern);
+	
+#endif
+
 	// Send error code
 	xp_SendByte(lpt_fd, i);
 	
+#ifndef __WIN32
+	
 	if( !pcdrv_dir )
 		return;
+
+#else
+	
+	if( hFind == INVALID_HANDLE_VALUE )
+		return;
+
+#endif
 		
 	// Get dir entry
+#ifndef __WIN32
+
 	errno = 0;
 	while( dir = readdir(pcdrv_dir) )
 	{
@@ -572,16 +648,41 @@ void pcdrv_firstfile(int lpt_fd)
 	xp_SendBytes(lpt_fd, (unsigned char*)&i, 4);
 	xp_SendByte(lpt_fd, 0);
 	xp_SendByte(lpt_fd, 0);
+	
+#else
+	
+	xp_SendBytes(lpt_fd, (unsigned char*)&FindFileData.nFileSizeLow, 4);
+	
+	if( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
+		xp_SendByte(lpt_fd, 16);
+	else
+		xp_SendByte(lpt_fd, 0);
+	
+	for( i=0; (FindFileData.cFileName[i])&&(i<19); i++ )
+		xp_SendByte(lpt_fd, FindFileData.cFileName[i]);
+	
+	xp_SendByte(lpt_fd, 0);
+	
+#endif
+	
 }
 
 void pcdrv_nextfile(int lpt_fd)
 {
-	int i,j;
+#ifndef __WIN32
 	struct stat fs;
 	struct dirent *dir;
+#else
+	WIN32_FIND_DATA FindFileData;
+#endif
+	int i,j;
 	char *c;
 	
+#ifndef __WIN32
 	if( !pcdrv_dir )
+#else
+	if( hFind == INVALID_HANDLE_VALUE )
+#endif
 	{
 		i = 0;
 		xp_SendByte(lpt_fd, PCDRV_ENOTDIR);
@@ -589,9 +690,11 @@ void pcdrv_nextfile(int lpt_fd)
 		return;
 	}
 	
+#ifndef __WIN32
+
 	// Send ok error code
 	xp_SendByte(lpt_fd, 0);
-	
+
 	// Get dir entry
 	while( dir = readdir(pcdrv_dir) )
 	{
@@ -625,6 +728,52 @@ void pcdrv_nextfile(int lpt_fd)
 	xp_SendBytes(lpt_fd, (unsigned char*)&i, 4);
 	xp_SendByte(lpt_fd, 0);
 	xp_SendByte(lpt_fd, 0);
+	
+#else
+
+	i = 0;
+	if( !FindNextFile(hFind, &FindFileData) )
+	{
+		if( GetLastError() == ERROR_NO_MORE_FILES )
+		{
+			xp_SendByte(lpt_fd, 0);
+			xp_SendBytes(lpt_fd, (unsigned char*)&i, 4);
+			xp_SendByte(lpt_fd, 0);
+			xp_SendByte(lpt_fd, 0);
+			return;
+		}
+		
+		switch( GetLastError() )
+		{
+		case ERROR_ACCESS_DENIED:
+			printf("PCDRV firstfile: Permission denied.\n");
+			i = PCDRV_EPERM;
+			break;
+		case ERROR_PATH_NOT_FOUND:
+			printf("PCDRV firstfile: Name is not a directory.\n");
+			i = PCDRV_ENOENT;
+			break;
+		default:
+			printf("PCDRV firstfile: FindFirstFile() failed (%d)\n", GetLastError());
+			i = PCDRV_EUNDEF;
+		}
+	}
+	
+	xp_SendByte(lpt_fd, i);
+	
+	xp_SendBytes(lpt_fd, (unsigned char*)&FindFileData.nFileSizeLow, 4);
+	
+	if( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
+		xp_SendByte(lpt_fd, 16);
+	else
+		xp_SendByte(lpt_fd, 0);
+	
+	for( i=0; (FindFileData.cFileName[i])&&(i<19); i++ )
+		xp_SendByte(lpt_fd, FindFileData.cFileName[i]);
+	
+	xp_SendByte(lpt_fd, 0);
+	
+#endif
 }
 
 void pcdrv_chdir(int lpt_fd)

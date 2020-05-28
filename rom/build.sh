@@ -1,9 +1,8 @@
 #!/bin/bash
 
-version="0.20a"
 build_date=$(date +%Y%m%d%H%M)
 
-armips -strequ build_date $build_date -strequ version $version \
+armips -strequ build_date $build_date \
 	-sym n00brom.sym -temp n00brom.lst \
 	n00brom.asm
 

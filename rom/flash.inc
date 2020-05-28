@@ -31,7 +31,7 @@ flash_mode:							; Flash mode routine
 	addiu	sp, -8
 	addiu	sp, 8
 	lw		a0, VAR_sioread(gp)
-	beqz	v0, @@proceed_download
+	beqz	v0, @@proceed_download_sio
 	nop
 	
 	lw		v0, VAR_sioread(gp)		; Retry
@@ -39,16 +39,64 @@ flash_mode:							; Flash mode routine
 	beqz	v0, flash_mode
 	nop
 	
+	la		v0, config				; Xplorer binary loader
+	lbu		v0, SET_carttype(v0)
+	nop
+	bne		v0, 2, @@download_wait
+	nop
+	
+	lbu		v0, VAR_xpready(gp)
+	nop
+	bnez	v0, @@xp_ready
+	nop
+	
+	lui		a0, XP_IOBASE
+	lbu		v0, XP_pcshake(a0)
+	nop
+	andi	v0, 0x1
+	beqz	v0, @@download_wait
+	nop
+	
+	li		v0, 1
+	b		@@download_wait
+	sb		v0, VAR_xpready(gp)
+	
+@@xp_ready:
+
+	lui		a0, XP_IOBASE			; Check if handshake went low
+	lbu		v0, XP_pcshake(a0)
+	nop
+	andi	v0, 0x1
+	bnez	v0, @@download_wait
+	nop
+	
+	lbu		v0, XP_data(a0)
+	nop
+	beq		v0, 'B', @@proceed_download_xp
+	nop
+	
 	b		@@download_wait
 	nop
 	
-@@proceed_download:
+@@proceed_download_xp:
+	jal		xp_readbyte
+	nop
+	jal		xplorer_binloader
+	nop
+	beqz	v0, flash_mode			; Retry download if checksum failed
+	nop
+	b		@@download_ok
+	nop
+	
+@@proceed_download_sio:
 
 	jal		sio_binloader			; Download the ROM image
-	addiu	a0, r0, 2
+	li		a0, 2
 	beqz	v0, flash_mode			; Retry download if checksum failed
 	nop
 	
+@@download_ok:
+
 	move	s0, v0					; Copy image size to s0
 	
 	addiu	s0, 255					; Round it to multiples of 256
