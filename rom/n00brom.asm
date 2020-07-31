@@ -1,6 +1,6 @@
 .psx
 
-version			equ "0.25a"
+version			equ "0.28b"
 
 .include "cop0regs.inc"
 .include "hwregs.inc"
@@ -491,13 +491,6 @@ idle_screen:
 	jal		DrawText_multiline
 	li		a1, 0x30
 	
-	
-	li		a0, 24
-	li		a1, 40
-	jal		DrawText
-	addiu	a2, gp, VAR_siobuff
-	
-	
 	la		a0, config
 	lbu		v0, 0(a0)
 	nop
@@ -711,6 +704,8 @@ idle_screen:
 	nop
 	beq		v0, 'B', @@do_xpbinloader
 	nop
+	beq		v0, 'P', @@do_xppatloader
+	nop
 
 @@skip_xp:
 	
@@ -787,21 +782,38 @@ idle_screen:
 	b		@@loop
 	nop
 	
+@@do_xppatloader:
+	jal		xp_readbyte
+	nop
+	jal		xplorer_binloader
+	addiu	a0, r0, 1
+	b		@@loop
+	nop
+	
 @@do_loader:
 	jal		sio_loader
 	nop
-	b		@@loop
+	b		@@sio_end
 	nop
 	
 @@do_binloader:
 	jal		sio_binloader
 	move	a0, r0
-	b		@@loop
+	b		@@sio_end
 	nop
-	
+		
 @@do_patloader:
 	jal		sio_binloader
 	addiu	a0, r0, 1
+	b		@@sio_end
+	nop
+	
+@@sio_end:
+	addiu	a0, gp, VAR_siobuff		; Set read target
+	jal		sioSetRead
+	addiu	a1, r0, 4
+	sw		r0, VAR_siobuff+0(gp)
+	sw		r0, VAR_siobuff+4(gp)
 	b		@@loop
 	nop
 	
@@ -1027,10 +1039,18 @@ config:
 	db		0						; Background
 	db		0						; Home screen
 
-.align		0x100					; Pad to align to the 256 byte block boundary
-									; for saving options easily
+.align		0x100					; Pad to align to the 256 byte block
+									; boundary for saving options easily
 
-	
+sram_jump:							; Special SRAM jump for use with debuggers
+
+	lui		v0, XP_IOBASE			; Set memory map to SRAM
+	li		v1, 0x10
+	sb		v1, 1(v0)
+	lui		v0, 0x1F04				; Jump to SRAM region
+	jr		v0
+	nop
+
 preboot:							; Preboot code, installs break vector and 
 									; sets breakpoint for midbook trick
 								

@@ -15,6 +15,7 @@
 #include <xplorer.h>
 #include "pcdrv.h"
 
+#define PCDRV_VER	0x0100
 
 static FILE *pcdrv_fd[PCDRV_MAXFILES];
 
@@ -61,6 +62,13 @@ void pcdrv_deinit(void)
 	if( hFind != INVALID_HANDLE_VALUE )
 		FindClose(hFind);
 #endif
+}
+
+void pcdrv_initcmd(int lpt_fd)
+{
+	int i = PCDRV_VER;
+	
+	xp_SendBytes(lpt_fd, (unsigned char*)&i, 2);
 }
 
 void pcdrv_open(int lpt_fd)
@@ -851,6 +859,9 @@ int pcdrv_parse(int lpt_fd, int cmd)
 {
 	switch(cmd)
 	{
+	case 0x10:
+		pcdrv_initcmd(lpt_fd);
+		return 1;
 	case 0x20:
 		pcdrv_open(lpt_fd);
 		return 1;

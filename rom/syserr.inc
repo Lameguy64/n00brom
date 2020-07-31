@@ -2,7 +2,7 @@
 
 install_syserr:
 
-	li		v0, 0x200					; Hooks SystemErrorBootOrDiskFailure()
+	li		v0, 0x200				; Hooks SystemErrorBootOrDiskFailure()
 	li		v1, 0xA1
 	sll		v1, 2
 	addu	v0, v1
@@ -33,11 +33,11 @@ syserr_bootdisk:
 	move	a1, r0
 	
 	lui		v1, 0x1f80
-	lui		v0, 0x027f			; FillVRAM command
+	lui		v0, 0x027f				; FillVRAM command
 	sw		v0, GP0(v1)
 	sw		r0, GP0(v1)
-	lui		v0, 0x0100			; y = 256
-	ori		v0, 0x0140			; x = 320
+	lui		v0, 0x0100				; y = 256
+	ori		v0, 0x0140				; x = 320
 	sw		v0, GP0(v1)
 	jal		ex_WaitGPU
 	nop

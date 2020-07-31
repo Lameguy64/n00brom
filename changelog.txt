@@ -1,12 +1,43 @@
+Version 0.28b (07-31-2020) by Lameguy64:
+
+* Exception handler now uses the SystemErrorUnresolvedException() vector of
+  the BIOS. No longer requires patching/backing up the CPU exception vector
+  which can potentially cause incompatibilities. New exception handler is
+  smaller as well which reduces the size of n00bROM by a good several
+  hundred bytes.
+  
+* Exception handler now skips pollhost() break opcodes (break 1024)
+  allowing DTL-H2000 prototypes to run on retail consoles, provided it
+  does not use PCDRV break opcodes (not yet supported) or sim: device.
+
+* Added SRAM jump routine for Xplorer cartridges, to be used by debug
+  monitors.
+
+* Added patch binary capability for serial and Xplorer interfaces, to be
+  used by debuggers or to apply custom kernel patches to the console.
+
+* Fixed unstable/broken binary file download over serial. Also fixed binary
+  file downloading causing the home screen to enter screensaver mode when using
+  either serial or Xplorer comms interfaces.
+  
+* Improved Ez-Swap with a SetSession command, allowing redbook audio to play
+  properly with the swap trick boot method.
+
+xpcomms updates:
+  
+* Added missing init command for polling the xpcomms pcdrv version, in case
+  anyone needs it.
+
+
 Version 0.25a (05-28-2020) by Lameguy64:
 
 * Inverted PC handshake logic in Xplorer comms which may improve reliability in
   certain cases due to the way how /dev/parport works.
   
-* Removed CD-ROM bootstrap routine replaced with using the BIOS' CD-ROM
+* Removed CD-ROM bootstrap routine, replaced with the BIOS' CD-ROM
   bootstrap routine for increased compatibility and reduces the size of
-  n00bROM. Midbook bootstrap trick modified to allow jumping to the BIOS
-  bootstrap routine.
+  n00bROM. Midbook bootstrap sequence has been modified to allow returning
+  execution to the BIOS bootstrap routine.
 
 * Fixed bug where uploading binary data can corrupt the stack. May not be
   noticeable with PS-EXEs but may cause a crash when uploading more than one

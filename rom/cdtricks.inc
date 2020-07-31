@@ -215,7 +215,7 @@ unlock_cdrom:						;; HC05 secret unlock boot method
 
 swap_trick:							;; Ez-swap boot method
 
-	addiu	sp, -4
+	addiu	sp, -8
 	sw		ra, 0(sp)
 	
 @@repeat_getid:
@@ -324,9 +324,26 @@ swap_start_disc:
 	jal		sort_status
 	nop
 
-	lbu		v0, VAR_cdinum(gp)		; Wait until two CD IRQs occur on init
+	lbu		v0, VAR_cdinum(gp)		; Wait until two CD IRQs occur
 	nop
 	blt		v0, 2, @@loop
+	nop
+	
+	li		a0, 0x12				; SetSession (acts like ReadTOC but doesn't
+	addiu	a1, r0, 1				; clear authentication status, thanks rama)
+	sw		a1, 4(sp)
+	addiu	a1, sp, 4
+	jal		cd_control
+	addiu	a2, r0, 1
+	
+@@loop_2:
+	la		a0, text_check_cd
+	jal		sort_status
+	nop
+	
+	lbu		v0, VAR_cdinum(gp)		; Wait until two CD IRQs occur
+	nop
+	blt		v0, 2, @@loop_2
 	nop
 	
 @@repeat_getid:
@@ -353,7 +370,7 @@ swap_start_disc:
 	nop
 
 	lw		ra, 0(sp)
-	addiu	sp, 4
+	addiu	sp, 8
 	jr		ra
 	addi	v0, r0, 1
 	

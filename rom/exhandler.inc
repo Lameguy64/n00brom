@@ -1,157 +1,93 @@
 ; Exception handler, for trapping unhandled exceptions
 
-prevhook	equ	0xA000D000
+PCB_addr	equ	0x108
 
-ST_at		equ	0
-ST_v0		equ	4
-ST_v1		equ	8
-ST_a0		equ	12
-ST_a1		equ	16
-ST_a2		equ	20
-ST_a3		equ	24
-ST_t0		equ	28
-ST_t1		equ	32
-ST_t2		equ	36
-ST_t3		equ	40
-ST_t4		equ	44
-ST_t5		equ	48
-ST_t6		equ	52
-ST_t7		equ	56
-ST_s0		equ	60
-ST_s1		equ	64
-ST_s2		equ	68
-ST_s3		equ	72
-ST_s4		equ	76
-ST_s5		equ	80
-ST_s6		equ	84
-ST_s7		equ	88
-ST_t8		equ	92
-ST_t9		equ	96
-ST_k0		equ	100
-ST_k1		equ	104
-ST_gp		equ	108
-ST_sp		equ	112
-ST_fp		equ	116
-ST_ra		equ	120
-ST_lo		equ	124
-ST_hi		equ	128
-ST_clut		equ	132
-ST_temp		equ	134
+TCB_status	equ	0
+TCB_reserve	equ	4
+TCB_r0		equ	8
+TCB_at		equ	12
+TCB_v0		equ	16
+TCB_v1		equ	20
+TCB_a0		equ	24
+TCB_a1		equ	28
+TCB_a2		equ	32
+TCB_a3		equ	36
+TCB_t0		equ	40
+TCB_t1		equ	44
+TCB_t2		equ	48
+TCB_t3		equ	52
+TCB_t4		equ	56
+TCB_t5		equ	60
+TCB_t6		equ	64
+TCB_t7		equ	68
+TCB_s0		equ	72
+TCB_s1		equ	76
+TCB_s2		equ	80
+TCB_s3		equ	84
+TCB_s4		equ	88
+TCB_s5		equ	92
+TCB_s6		equ	96
+TCB_s7		equ	100
+TCB_t8		equ	104
+TCB_t9		equ	108
+TCB_k0		equ	112
+TCB_k1		equ	116
+TCB_gp		equ	120
+TCB_sp		equ	124
+TCB_fp		equ	128
+TCB_ra		equ	132
+TCB_epc		equ	136
+TCB_hi		equ	140
+TCB_lo		equ	144
+TCB_sr		equ	148
+TCB_cause	equ	152
 
 
 install_exception:
 	
-	la		v1, prevhook				; Installs a CPU exception monitor
-	la		a0, exception
-	li		a1, (exception_end-exception)
-@@copy_loop:
-	lw		v0, 0(a0)
-	addiu	a0, 4
-	sw		v0, 0(v1) 		
-	addiu	a1, -4
-	bgtz	a1, @@copy_loop
-	addiu	v1, 4
-
-	li		v0, 0x80
-	lw		a0, 0(v0)
-	lw		a1, 4(v0)
-	lw		a2, 8(v0)
-	lw		a3, 12(v0)
-	
-	sw		a0, 0(v1)
-	sw		a1, 4(v1)
-	sw		a2, 8(v1)
-	sw		a3, 12(v1)
-	
-	la		v1, 0xA0000080
-	la		v0, 0x3C1A0000
-	sw		v0, 0(v1)
-	la		v0, 0x375AD000
-	sw		v0, 4(v1)
+	li		v0, 0x200				; Hooks SystemErrorUnresolvedException()
+	li		v1, 0x40
+	sll		v1, 2
+	addu	v0, v1
+	la		v1, syserr_unresolved
+	sw		v1, 0(v0)
 	
 	jr		ra
 	nop
-	
-	
-exception:
-
-	nop
-	nop
-	nop
-	nop
-	li		k0, 0xC000
-	
-	sw		v0, ST_v0(k0)
-	sw		v1, ST_v1(k0)
-	
-	mfc0	v0, CAUSE
-	nop
-	nop
-	
-	srl		v0, 2
-	andi	v0, 0x1f
-	
-	li		v1, 0x8						; Let syscalls pass
-	beq		v0, v1, @@return
-	nop
-	beqz	v0, @@return				; Trap everything else but interrupts
-	nop
-	
-	la		k0, exception_fail
-	jr		k0
-	nop
-	
-@@return:
-
-	lw		v0, ST_v0(k0)
-	lw		v1, ST_v1(k0)
-	
-exception_end:
 
 	
-exception_fail:
+syserr_unresolved:					; Called by BIOS kernel
+	
+	mfc0	v0, CAUSE				; Get cop0 CAUSE and EPC values
+	mfc0	v1, EPC
+	
+	srl		v0, 2					; Determine if the cause is a break opcode
+	andi	v0, 0xF
+	bne		v0, 0x9, @@not_break
+	nop
+	
+	lw		v0, 0(v1)				; Extract the break opcode's value
+	lw		v1, PCB_addr(r0)
+	srl		v0, 6
+	andi	v0, 0xFFFF
+	bne		v0, 1024, @@not_break	; libsn pollhost() break opcode value
+	nop
+	
+	lw		v1, 0(v1)				; Adjust EPC to skip break opcode in TCB
+	nop
+	lw		v0, TCB_epc(v1)
+	nop
+	addiu	v0, 4
+	sw		v0, TCB_epc(v1)
+	
+	addiu	t2, r0, 0xB0			; ReturnFromException()
+	jr		t2
+	addiu	t1, r0, 0x17
+	
+@@not_break:						; Real, unhandled exception
 
-	sw		k0, 0(r0)
-	
-	li		k0, 0xC000
-	sw		at, ST_at(k0)
-	;sw		v0, ST_v0(k0)
-	;sw		v1, ST_v1(k0)
-	sw		a0, ST_a0(k0)
-	sw		a1, ST_a1(k0)
-	sw		a2, ST_a2(k0)
-	sw		a3, ST_a3(k0)
-	sw		t0, ST_t0(k0)
-	sw		t1, ST_t1(k0)
-	sw		t2, ST_t2(k0)
-	sw		t3, ST_t3(k0)
-	sw		t4, ST_t4(k0)
-	sw		t5, ST_t5(k0)
-	sw		t6, ST_t6(k0)
-	sw		t7, ST_t7(k0)
-	sw		s0, ST_s0(k0)
-	sw		s1, ST_s1(k0)
-	sw		s2, ST_s2(k0)
-	sw		s3, ST_s3(k0)
-	sw		s4, ST_s4(k0)
-	sw		s5, ST_s5(k0)
-	sw		s6, ST_s6(k0)
-	sw		s7, ST_s7(k0)
-	sw		t8, ST_t8(k0)
-	sw		t9, ST_t9(k0)
-	lw		v0, 0(r0)
-	sw		k1, ST_k1(k0)
-	sw		v0, ST_k0(k0)
-	sw		gp, ST_gp(k0)
-	sw		sp, ST_sp(k0)
-	sw		fp,	ST_fp(k0)
-	sw		ra,	ST_ra(k0)
-	mflo	v0
-	mfhi	v1
-	sw		v0, ST_lo(k0)
-	sw		v1, ST_hi(k0)
-	
-	li		gp, 0xD000			; Set workspace area address
+	addiu	sp, -32					; Set workspace area address
+	move	gp, sp
 	
 	jal		ex_InitGPU
 	nop
@@ -193,8 +129,8 @@ exception_fail:
 	mfc0	a0, EPC
 	nop
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	move	a0, gp
 	jal		ex_drawtext
 	move	a1, v0
 	addiu	v0, 8
@@ -205,8 +141,8 @@ exception_fail:
 	mfc0	a0, BADVADDR
 	nop
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	move	a0, gp
 	jal		ex_drawtext
 	move	a1, v0
 	
@@ -223,8 +159,8 @@ exception_fail:
 @@pc_notaligned:
 	nop
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	move	a0, gp
 	jal		ex_drawtext
 	move	a1, v0
 	
@@ -235,16 +171,18 @@ exception_fail:
 	mfc0	a0, CAUSE
 	nop
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	move	a0, gp
 	move	a1, v0
 	jal		ex_drawtext
 	nop
 	
+	lw		s1, PCB_addr(r0)		; Print out CPU registers
 	la		s0, reg_labels
-	li		s1, 0xC000
+	lw		s1, 0(s1)
 	li		s3, 0x0008
 	li		s5, 3
+	addiu	s1, TCB_at
 	
 @@reg_loop_col:
 	
@@ -252,6 +190,13 @@ exception_fail:
 	li		s4, 11
 	
 @@reg_loop_row:
+	
+	bne		s5, 1, @@skip_change	; To make the register pointer skip EPC
+	nop								; before drawing the hi/lo registers
+	bne		s4, 2, @@skip_change
+	nop
+	addiu	s1, 4
+@@skip_change:
 	
 	sll		a1, s2, 16
 	or		a1, s3
@@ -262,8 +207,9 @@ exception_fail:
 	lw		a0, 0(s1)
 	addiu	s1, 4
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	
+	move	a0, gp
 	move	a1, v0
 	jal		ex_drawtext
 	nop
@@ -276,15 +222,16 @@ exception_fail:
 	bgtz	s5, @@reg_loop_col
 	addi	s3, 0x60
 	
-	
 	la		a0, label_stack
 	la		a1, 0x00980008
 	jal		ex_drawtext
 	nop
 
-	move	s0, sp
+	lw		s0, PCB_addr(r0)		; Print the stack contents
 	li		s1, 0x00A0
+	lw		s0, 0(s0)
 	li		s3, 8
+	lw		s0, TCB_sp(s0)
 	
 @@stack_row_loop:
 
@@ -297,8 +244,8 @@ exception_fail:
 	lw		a0, 0(s0)
 	addiu	s0, 4
 	jal		ex_reg2hex
-	addiu	a1, gp, ST_temp
-	addiu	a0, gp, ST_temp
+	move	a1, gp
+	move	a0, gp
 	jal		ex_drawtext
 	move	a1, v0
 	
@@ -313,7 +260,7 @@ exception_fail:
 @@end:
 	b		@@end
 	nop
-		
+	
 	
 ex_drawtext:
 	addiu	sp, -4
@@ -813,9 +760,9 @@ reg_labels:
 	.align	0x4
 	.asciiz "RA="
 	.align	0x4
-	.asciiz "LO="
-	.align	0x4
 	.asciiz "HI="
+	.align	0x4
+	.asciiz "LO="
 	.align	0x4
 	
 crash_msg:

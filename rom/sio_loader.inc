@@ -80,11 +80,12 @@ sio_loader:							;; Loader routine
 	
 sio_binloader:
 	
-	addiu	sp, -(8+BIN_len)
+	addiu	sp, -(12+BIN_len)
 	sw		ra, 0(sp)
 	sw		a0, 4(sp)
+	sw		s0, 8(sp)
 	
-	addiu	s0, sp, 8
+	addiu	s0, sp, 12
 	
 	move	a0, s0					; Prepare receiving parameters
 	jal		sioSetRead
@@ -187,9 +188,9 @@ sio_binloader:
 @@exit:
 
 	lw		ra, 0(sp)
-	addiu	sp, (8+BIN_len)
+	lw		s0, 8(sp)
 	jr		ra
-	nop
+	addiu	sp, (12+BIN_len)
 	
 	
 do_loader_exec:

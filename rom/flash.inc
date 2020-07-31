@@ -82,7 +82,7 @@ flash_mode:							; Flash mode routine
 	jal		xp_readbyte
 	nop
 	jal		xplorer_binloader
-	nop
+	li		a0, 2
 	beqz	v0, flash_mode			; Retry download if checksum failed
 	nop
 	b		@@download_ok

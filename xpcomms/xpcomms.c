@@ -22,7 +22,7 @@
 #include <xplorer.h>
 #include "pcdrv.h"
 
-#define VERSION "0.25a"
+#define VERSION "0.28b"
 
 #define LPT_DEV "/dev/parport0"
 
@@ -588,7 +588,7 @@ int uploadEXE(const char* exefile) {
 	return 0;
 }
 
-int uploadBIN(const char *binfile, unsigned int addr)
+int uploadBIN(const char *binfile, unsigned int addr, int patch)
 {
 	int i;
 	int progress,last_progress;
@@ -630,11 +630,23 @@ int uploadBIN(const char *binfile, unsigned int addr)
 	param.crc32 = crc32(buffer, param.size, CRC32_REMAINDER);
 		
 	// Send binary upload command
-	if( xp_SendByte(lpt_fd, 'B') )
+	if( patch == 0 )
 	{
-		printf("Target not responding.\n");
-		free(buffer);
-		return 1;
+		if( xp_SendByte(lpt_fd, 'B') )
+		{
+			printf("Target not responding.\n");
+			free(buffer);
+			return 1;
+		}
+	}
+	else
+	{
+		if( xp_SendByte(lpt_fd, 'P') )
+		{
+			printf("Target not responding.\n");
+			free(buffer);
+			return 1;
+		}
 	}
 	
 	// Send binary parameters
@@ -905,6 +917,27 @@ int main(int argc, const char *argv[])
 				action = 2;
 			}
 		}
+		else if( strcasecmp(argv[i], "patch") == 0 )
+		{
+			if( action == 0 )
+			{
+				i++;
+				if( i >= argc )
+				{
+					printf("No file specified.\n");
+					return EXIT_FAILURE;
+				}
+				send_file = argv[i];
+				i++;
+				if( i >= argc )
+				{
+					printf("No address specified.\n");
+					return EXIT_FAILURE;
+				}
+				sscanf(argv[i], "%x", &upload_addr);
+				action = 3;
+			}
+		}
 	}
 	
 	if( !action )
@@ -956,8 +989,15 @@ int main(int argc, const char *argv[])
 	}
 	else if( action == 2 )
 	{
-		if( uploadBIN(send_file, upload_addr) )
+		if( uploadBIN(send_file, upload_addr, 0) )
 			return EXIT_FAILURE;
+		noserv = 1;
+	}
+	else if( action == 3 )
+	{
+		if( uploadBIN(send_file, upload_addr, 1) )
+			return EXIT_FAILURE;
+		noserv = 1;
 	}
 	
 	if( noserv )

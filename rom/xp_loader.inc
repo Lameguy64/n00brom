@@ -116,13 +116,15 @@ xplorer_loader:
 
 xplorer_binloader:
 	
-	addiu	sp, -(8+BIN_len)
+	addiu	sp, -(12+BIN_len)
 	sw		ra, 0(sp)
 	sw		a0, 4(sp)
+	sw		s0, 8(sp)
 	
-	addiu	s0, sp, 8			; Allocate stack for the binary download params
-	
-	move	a0, s0				; Receive binary parameters
+	addiu	s0, sp, 12				; Allocate stack for the binary
+									; download params
+									
+	move	a0, s0					; Receive binary parameters
 	jal		xp_readbytes
 	li		a1, BIN_len
 	
@@ -130,11 +132,11 @@ xplorer_binloader:
 	jal		sort_status
 	nop
 	
-	lw		v0, 4(sp)			; Use fixed address if patch mode
+	lw		v0, 4(sp)				; Use fixed address if patch mode
 	lui		a0, 0xA001
 	bnez	v0, @@patch_addr
 	nop
-	lw		a0, BIN_addr(s0)	; Download binary file data
+	lw		a0, BIN_addr(s0)		; Download binary file data
 @@patch_addr:
 	jal		xp_readbytes
 	lw		a1, BIN_size(s0)
@@ -143,16 +145,34 @@ xplorer_binloader:
 	lui		a0, 0x8001
 	bnez	v0, @@patch_addr_csum
 	nop
-	lw		a0, BIN_addr(s0)	; Checksum the executable
+	lw		a0, BIN_addr(s0)		; Checksum the executable
 @@patch_addr_csum:
 	lw		a1, BIN_size(s0)
 	jal		checksum
 	addiu	a2, r0, -1
 	
-	lw		v1, BIN_crc32(s0)	; Test checksum
+	lw		v1, BIN_crc32(s0)		; Test checksum
+	lw		a0, 4(sp)
+	bne		v0, v1, @@checksum_fail
 	nop
-	beq		v0, v1, @@exit
+	
+	bne		a0, 1, @@skip_patch
+	nop
+
+	EnterCriticalSection			; Execute the patch binary
+	
+	lui		a0, 0x8001
+	jalr	a0
+	nop
+	
+	ExitCriticalSection
+
+@@skip_patch:
+
+	b		@@exit
 	lw		v0, BIN_size(s0)
+
+@@checksum_fail:
 
 	move	s0, r0
 
@@ -180,6 +200,6 @@ xplorer_binloader:
 @@exit:
 	
 	lw		ra, 0(sp)
-	addiu	sp, (8+BIN_len)
+	lw		s0, 8(sp)
 	jr		ra
-	nop
+	addiu	sp, (12+BIN_len)
