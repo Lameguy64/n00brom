@@ -130,9 +130,15 @@ PadRead:
 	
 	
 _pad_exchange:
+
+	addiu	sp, -4
+	sw		ra, 0(sp)
 	
 	lui		t0, 0x1F80
-	
+
+	jal		_pad_wait			; PAL fix: 33mhz/250khz(ish).
+	li		v0, 0x88			; Lower vals work, higher kills framerate
+
 	sb		a0, JOY_TXRX(t0)
 	nop
 @@send_wait:
@@ -170,6 +176,8 @@ _pad_exchange:
 	
 @@exit_exchg:
 
+	lw		ra, 0(sp)
+	addiu	sp, 4
 	jr		ra
 	nop
 
