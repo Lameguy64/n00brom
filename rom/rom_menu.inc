@@ -151,11 +151,10 @@ rom_menu:
 	jal		frame_done
 	move	a0, r0
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
