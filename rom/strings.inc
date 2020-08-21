@@ -7,11 +7,11 @@ notice:
 .ascii	"pre-installed without permission", 0x10
 .ascii	"from Lameguy64 himself, you're", 0x10
 .ascii	"being ripped off and you must", 0x10
-.ascii	"demand for a refund. Meido-Tek", 0x10
+.ascii	"demand a refund. Meido-Tek", 0x10
 .ascii	"Productions is not responsible", 0x10
-.ascii	"(nor concerned) of any liabilities", 0x10
-.ascii	"that may occur for 'improper' use", 0x10 
-.ascii	"of n00bROM and it's unlock/swap", 0x10
+.ascii	"for nor concerned with liabilities", 0x10
+.ascii	"that may occur from 'improper' use", 0x10 
+.ascii	"of n00bROM and its unlock/swap", 0x10
 .ascii	"capabilities. It is entirely up to", 0x10
 .ascii	"you how you wish to use n00bROM.", 0x10, 0x10
 .ascii	"n00bROM and source code", 0x10
