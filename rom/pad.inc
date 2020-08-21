@@ -78,12 +78,19 @@ PadRead:
 	bnez	v1, @@no_device
 	addiu	v0, r0 , 1
 	
-	sb		r0, 0(a1)
+	sb		r0, 0(a1)				; first buffer byte always zeroed
 	addiu	a1, 1
 	
 	jal		_pad_exchange			; Send second check byte
 	li		a0, 0x42
 	
+	bne	v0, 0x73, @@not_analogue	; if the pad's in analogue mode
+	nop								; then pretend it isn't.
+	li	v0,	0x41								
+
+
+@@not_analogue:	
+
 	sb		v0, 0(a1)
 	addiu	a1, 1
 	addiu	a2, -2
