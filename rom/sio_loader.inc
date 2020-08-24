@@ -241,10 +241,6 @@ do_loader_exec:
 	addiu	sp, -8
 	addiu	sp, 8
 	
-	; Turn off BIOS pad routine	
-	jal		StopPAD
-	nop
-	
 	lui		a0, 0x801F				; Set stack address
 	ori		a0, 0xFFF0
 	sw		a0, EXEC_saddr(s0)

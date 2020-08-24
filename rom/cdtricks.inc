@@ -184,11 +184,10 @@ unlock_cdrom:						;; HC05 secret unlock boot method
 	jal		frame_done
 	move	a0, r0
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -253,12 +252,11 @@ swap_trick:							;; Ez-swap boot method
 	li		a0, 2
 	
 disc_stopped:
-
-	; Disabled replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -291,11 +289,10 @@ disc_stopped:
 	jal		frame_done
 	move	a0, r0
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -376,11 +373,10 @@ swap_start_disc:
 	
 swap_no_disc:
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -413,11 +409,10 @@ swap_no_disc:
 	jal		frame_done
 	move	a0, r0
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100

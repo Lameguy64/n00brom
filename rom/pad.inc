@@ -78,12 +78,19 @@ PadRead:
 	bnez	v1, @@no_device
 	addiu	v0, r0 , 1
 	
-	sb		r0, 0(a1)
+	sb		r0, 0(a1)				; first buffer byte always zeroed
 	addiu	a1, 1
 	
 	jal		_pad_exchange			; Send second check byte
 	li		a0, 0x42
 	
+	bne	v0, 0x73, @@not_analogue	; if the pad's in analogue mode
+	nop								; then pretend it isn't.
+	li	v0,	0x41								
+
+
+@@not_analogue:	
+
 	sb		v0, 0(a1)
 	addiu	a1, 1
 	addiu	a2, -2
@@ -123,9 +130,15 @@ PadRead:
 	
 	
 _pad_exchange:
+
+	addiu	sp, -4
+	sw		ra, 0(sp)
 	
 	lui		t0, 0x1F80
-	
+
+	jal		_pad_wait			; PAL fix: 33mhz/250khz(ish).
+	li		v0, 0x88			; Lower vals work, higher kills framerate
+
 	sb		a0, JOY_TXRX(t0)
 	nop
 @@send_wait:
@@ -163,6 +176,8 @@ _pad_exchange:
 	
 @@exit_exchg:
 
+	lw		ra, 0(sp)
+	addiu	sp, 4
 	jr		ra
 	nop
 

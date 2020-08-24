@@ -12,7 +12,6 @@ rom_menu:
 	;nop
 	
 	move	s0, r0						; Selected item
-	lhu		s1, VAR_padbuff(gp)
 	
 	la		a0, config
 	addiu	a1, gp, VAR_cdresp
@@ -151,11 +150,12 @@ rom_menu:
 	jal		frame_done
 	move	a0, r0
 	
-	; Disabled, temporarily replaced with BIOS pad
-	;addiu	a1, gp, VAR_padbuff
-	;addiu	a2, r0, 34
-	;jal		PadRead
-	;move	a0, r0
+	lhu		s1, VAR_padbuff+2(gp)	; previous value
+
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -163,8 +163,8 @@ rom_menu:
 	nop
 	lhu		v0, VAR_padbuff+2(gp)
 	nop
-	beq		v0, s1, @@no_pad
-	move	s1, v0
+	beq		v0, s1, @@no_pad		; Anything pressed/unpressed?
+	sh		v0, VAR_padbuff+2(gp)
 	
 	andi	v1, v0, 0x10			; Up button
 	beqz	v1, @@menu_up

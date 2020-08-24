@@ -168,9 +168,7 @@ program_start:
 	rfe
 	
 	EnterCriticalSection			; Exit routine (to BIOS bootstrap routine)
-	
-	jal		StopPAD
-	nop
+
 	jal		HookDefaultInt
 	nop
 	
@@ -351,18 +349,7 @@ init:
 	sw		v0, VAR_padbuff+8(gp)
 	sw		v0, VAR_padbuff+12(gp)
 	
-	;jal		PadInit				; Initialize pad interface
-	;nop
-	
-	addiu	a0, gp, VAR_padbuff		; Use BIOS routines as custom routines are
-	li		a1, 34					; non-working for PAL units
-	addiu	a2, gp, VAR_padbuff+34
-	li		a3, 34
-	jal		InitPAD
-	addiu	sp, -16
-	addiu	sp, 16
-	
-	jal		StartPAD
+	jal		PadInit					; Initialize pad interface
 	nop
 	
 	move	a0, r0					; Disable VSync IRQ auto acknowledge
@@ -744,10 +731,10 @@ idle_screen:
 	
 @@skip_sio_reset:
 	
-	;addiu	a1, gp, VAR_padbuff		; Disabled, temporarily replaced with
-	;addiu	a2, r0, 34				; BIOS pad
-	;jal		PadRead
-	;move	a0, r0
+	addiu	a1, gp, VAR_padbuff
+	addiu	a2, r0, 34
+	jal		PadRead
+	move	a0, r0
 	
 	lhu		v0, VAR_padbuff(gp)
 	li		at, 0x4100
@@ -859,8 +846,7 @@ reg2hex:							; a0 - value
 	
 
 
-;.include "pad.inc"					; Commented out temporarily until fixed for
-									; PAL units
+.include "pad.inc"		
 .include "flash.inc"
 .include "cd.inc"
 .include "cdtricks.inc"
