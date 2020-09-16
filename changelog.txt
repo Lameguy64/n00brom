@@ -1,3 +1,27 @@
+Version 0.30b (09-16-2020) by Lameguy64 and sicklebrick:
+
+* Added serial handshake and flow control code. Should not affect
+  configurations that don't use handshake/flow control lines as long
+  as DTR and and RTS are kept high on PC side, or DSR and CTS are
+  left floating (unconnected) on console side.
+
+* Improved serial IRQ routine to avoid serial download issues when the
+  PSn00bDEBUG-mk2 monitor has been patched in.
+  
+* Fixed bug where pressing Start often brings up the ROM menu instead of
+  initiating the CD-ROM boot sequence.
+
+Changes by sicklebrick:
+
+* Fixed and restored low-level pad routines + additional tweaks.
+
+* Added analog input support.
+
+* Tweaked disclaimer text.
+
+* Some script cleanups.
+
+
 Version 0.28b (07-31-2020) by Lameguy64:
 
 * Exception handler now uses the SystemErrorUnresolvedException() vector of

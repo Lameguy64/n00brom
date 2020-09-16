@@ -11,7 +11,7 @@ sioInit_rom:
 	sh		v0, SIO_MODE_REG(a0)
 	li		v0, 0x12
 	sh		v0, SIO_BAUD_REG(a0)
-	li		v0, 0x815
+	li		v0, 0x817
 	sh		v0, SIO_CTRL_REG(a0)
 	
 	lhu		v0, IMASK(a0)
@@ -27,6 +27,13 @@ sioInit_rom:
 sioReadByte_rom:
 	; Read a byte from the serial port.
 	; Returns: v0 - byte read.
+	la		v1, SIO_CTRL_REG_A	; Turn on RTS
+	lhu		v0, 0(v1)
+	nop
+	ori		v0, 0x22
+	sh		v0, 0(v1)
+	
+@@rx_wait:
 	la		v0, SIO_STAT_REG_A	; Read value from serial
 	lw		v0, 0(v0)
 	nop
@@ -35,8 +42,17 @@ sioReadByte_rom:
 	nop
 	la		v0, SIO_TXRX_REG_A
 	lbu		v0, 0(v0)
-	jr		ra
+	
+	addiu	sp, -4
+	sw		v0, 0(sp)
+	la		v1, SIO_CTRL_REG_A	; Turn off RTS
+	lhu		v0, 0(v1)
 	nop
+	xori	v0, 0x20
+	sh		v0, 0(v1)
+	lw		v0, 0(sp)
+	jr		ra
+	addiu	sp, 4
 	
 sioSendByte_rom:
 	; Send a byte to the serial port.
@@ -44,6 +60,23 @@ sioSendByte_rom:
 	; Returns: none
 	addiu	sp, -4
 	sw		v0, 0(sp)
+	
+@@cts_wait:							; Wait for Clear-to-Send signal
+
+;	la		v0, SIO_STAT_REG_A	; Check DSR line
+;	lhu		v0, 0(v0)
+;	nop
+;	andi	v0, 0x80
+;	beqz	v0, @@cancel
+;	addi	v0, r0, -1
+	
+	la		v0, SIO_STAT_REG_A	; Wait for CTS
+	lhu		v0, 0(v0)
+	nop
+	andi	v0, 0x100
+	beqz	v0, @@cts_wait
+	nop
+	
 @@tx_ready:						; Wait for TX to become ready
 	la		v0, SIO_STAT_REG_A
 	lhu		v0, 0(v0)
@@ -60,6 +93,7 @@ sioSendByte_rom:
 	andi	v0, 0x4
 	beqz	v0, @@tx_done
 	nop
+	
 	lw		v0, 0(sp)			; Restore stack and return
 	jr		ra
 	addiu	sp, 4
