@@ -60,16 +60,17 @@ PadRead:
 	
 	sh		v0, JOY_CTRL(t0)		; Set to Joypad control interface
 	
-	jal		_pad_wait				; Delay for analog pads (needs testing)
-	li		v0, 500
+	jal		_pad_wait				; 35-36 micro seconds as per 5k BIOS
+	li		v0, 310                 
 	
-@@read_empty_fifo:					; Flush the RX FIFO just in case
-	lbu		v1, JOY_TXRX(t0)
-	lhu		v0, JOY_STAT(t0)
-	nop
-	andi	v0, 0x2
-	bnez	v0, @@read_empty_fifo
-	nop
+; May cause issues with third party adapters such as Brook wireless
+;@@read_empty_fifo:					; Flush the RX FIFO just in case
+;	lbu		v1, JOY_TXRX(t0)
+;	lhu		v0, JOY_STAT(t0)
+;	nop
+;	andi	v0, 0x2
+;	bnez	v0, @@read_empty_fifo
+;	nop
 	
 	jal		_pad_exchange			; Send device check byte
 	li		a0, 0x01
@@ -80,10 +81,17 @@ PadRead:
 	
 	sb		r0, 0(a1)				; first buffer byte always zeroed
 	addiu	a1, 1
+
+    jal     _pad_wait               ; 1st exchange needs 27microsec after ACK
+    li      v0, 190                 ; (e.g. 7 as usual + an extra 20)
 	
 	jal		_pad_exchange			; Send second check byte
 	li		a0, 0x42
 	
+    andi    a3, v0, 0xF             ; last 4 bits = num bytes to read
+    sll     a3, a3, 0x1             ; double it (halfwords)
+    addiu   a3, a3, 0x02            ; always read ( 1 + numbytes )
+
 	bne	v0, 0x73, @@not_analogue	; if the pad's in analogue mode
 	nop								; then pretend it isn't.
 	li	v0,	0x41								
@@ -107,8 +115,11 @@ PadRead:
 	bnez	v0, @@exit
 	nop
 	
-	addiu	a2, -1
-	bgtz	a2, @@read_loop
+    addiu   a3, -1                  ; have we read as many bytes 
+    beqz    a3, @@exit              ; as the pad wants us to?
+
+	addiu	a2, -1                  ; have we reached the max buffer
+	bgtz	a2, @@read_loop         ; length?
 	addiu	a1, 1
 	
 	b		@@exit
@@ -135,9 +146,6 @@ _pad_exchange:
 	sw		ra, 0(sp)
 	
 	lui		t0, 0x1F80
-
-	jal		_pad_wait			; PAL fix: 33mhz/250khz(ish).
-	li		v0, 0x88			; Lower vals work, higher kills framerate
 
 	sb		a0, JOY_TXRX(t0)
 	nop
@@ -169,11 +177,21 @@ _pad_exchange:
 
 @@done:
 
+    ; 7 microsec expected between TX/RX and ACK
+    ; ( happens without any special timing )
+
 	lhu		v1, JOY_CTRL(t0)
-	lbu		v0, JOY_TXRX(t0)
-	ori		v1, 0x10
+    nop
+	ori		v1, 0x10            ; Ack
 	sh		v1, JOY_CTRL(t0)
-	
+
+	jal		_pad_wait           ; Another 7 microsec expected
+	li		v0, 60              ; after each ack
+
+    ; the read has already happened,
+    ; just return it from the buffer
+    lbu		v0, JOY_TXRX(t0)
+
 @@exit_exchg:
 
 	lw		ra, 0(sp)
