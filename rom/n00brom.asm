@@ -1,6 +1,6 @@
 .psx
 
-version			equ "0.28b"
+version			equ "0.30b"
 
 .include "cop0regs.inc"
 .include "hwregs.inc"
@@ -226,9 +226,13 @@ main:
 	jal		idle_screen
 	nop
 
+	addiu	sp, -4
+	sw		v0, 0(sp)
 	move	a0, r0					; Stop SIO receive
 	jal		sioSetRead
 	move	a1, r0
+	lw		v0, 0(sp)
+	addiu	sp, 4
 
 	beqz	v0, @@boot
 	nop
@@ -444,7 +448,7 @@ idle_screen:
 	nop
 	beq		v0, 2, @@skip_screensave
 	nop
-		
+	
 	lw		v0, VAR_vsync(gp)		; Screen saver that activates in 2 minutes
 	nop	
 	srl		v0, 2
@@ -824,8 +828,15 @@ idle_screen:
 	
 sioSetRead:							; a0 - Target address
 									; a1 - Bytes to read
+		
 	sw		a0, VAR_sioaddr(gp)
 	sw		a1, VAR_sioread(gp)
+	
+	la		v1, SIO_CTRL_REG_A		; Turn on RTS
+	lhu		v0, 0(v1)
+	nop
+	ori		v0, 0x22
+	sh		v0, 0(v1)
 	
 	jr		ra
 	nop
@@ -895,6 +906,7 @@ int_handler:						; Interrupt handler (called by BIOS kernel)
 	andi	v0, 0x2
 	beqz	v0, @@sio_wait
 	nop
+@@sio_readmore:
 	la		v0, SIO_TXRX_REG_A
 	lbu		v0, 0(v0)
 	
@@ -911,6 +923,13 @@ int_handler:						; Interrupt handler (called by BIOS kernel)
 	addiu	a1, -1
 	sw		a0, VAR_sioaddr(gp)
 	sw		a1, VAR_sioread(gp)
+	
+	la		v0, SIO_STAT_REG_A		; Continue reading if FIFO still
+	lhu		v0, 0(v0)				; has data
+	nop
+	andi	v0, 2
+	bnez	v0, @@sio_readmore
+	nop
 	
 @@skip_sio:
 	
@@ -1017,9 +1036,9 @@ header:								; ROM header
 config:
 	db		0						; Video mode
 	db		0						; CD-ROM boot mode
-	db		0						; TTY redirect mode
+	db		1						; TTY redirect mode
 	db		0						; PCDRV enable
-	db		0						; Exception handler enable
+	db		1						; Exception handler enable
 	db		0						; Switch type
 	db		0						; Off switch action
 	db		0						; Background
